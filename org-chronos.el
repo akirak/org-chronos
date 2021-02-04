@@ -98,19 +98,23 @@ and ends at the same time on the next day."
 
 (defun org-chronos--clock-entries-on-heading ()
   "Return clock entries on the current Org heading after the point."
-  (let* ((content-end (save-excursion
-                        (org-back-to-heading)
-                        (end-of-line 1)
-                        (or (re-search-forward org-heading-regexp nil t)
-                            (point-max))))
-         (logbook-end (save-excursion
-                        (re-search-forward org-logbook-drawer-re content-end t)))
-         entries)
-    (when logbook-end
-      (while (re-search-forward org-clock-line-re logbook-end t)
-        (when-let (range (org-chronos--parse-clock-line))
-          (push range entries))))
-    entries))
+  (save-excursion
+    (org-back-to-heading)
+    (end-of-line 1)
+    (let* ((content-end (save-excursion
+                          (or (re-search-forward org-heading-regexp
+                                                 nil t)
+                              (point-max))))
+           (logbook-end (save-excursion
+                          (re-search-forward org-logbook-drawer-re
+                                             content-end t)))
+           entries)
+      (when logbook-end
+        (while (re-search-forward org-clock-line-re
+                                  logbook-end t)
+          (when-let (range (org-chronos--parse-clock-line))
+            (push range entries))))
+      entries)))
 
 (defun org-chronos--search-headings-with-clock (files from to)
   "Search headings with clock entries in a given time range.
