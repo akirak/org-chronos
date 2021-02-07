@@ -26,7 +26,8 @@
   ;; Optionally set after parsing
   group)
 
-;;;;
+;;;; Custom variables
+
 (defcustom org-chronos-log-dblock-defaults
   (list :span 'day :group 'tag :files #'org-agenda-files)
   "Default parameters of the Org dynamic block."
@@ -39,6 +40,10 @@ Note that a link is produced on every entry having clock
 entries. This may lead to generating IDs if you have turned on
 `org-id-link-to-org-use-id'."
   :type 'boolean)
+
+(defcustom org-chronos-tag-groups nil
+  "List of tags used to group headings."
+  :type '(repeat string))
 
 ;;;; Parsing
 
