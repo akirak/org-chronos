@@ -275,6 +275,9 @@ FIXME: FILES, FROM, and TO."
                       (string files))
                     range-start range-end))
          (group (plist-get params :group))
+         (group (if (stringp group)
+                    (intern group)
+                  group))
          (groups (when group
                    (cl-ecase group
                      (tag (org-chronos--group-elements-by-tag elements))
