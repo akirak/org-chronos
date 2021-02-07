@@ -29,7 +29,7 @@
 ;;;; Custom variables
 
 (defcustom org-chronos-log-dblock-defaults
-  (list :span 'day :group 'tag :files #'org-agenda-files)
+  (list :span 'day :files #'org-agenda-files)
   "Default parameters of the Org dynamic block."
   :type 'plist)
 
