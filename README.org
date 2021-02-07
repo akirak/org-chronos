@@ -1,0 +1,48 @@
+* org-chronos
+Org-Chronos is an opinionated time management layer for the Emacs Org mode.
+
+This is currently a work-in-progress, and I plan on adding more features.
+
+Disclaimer: This package is not based on [[https://github.com/dxknight/chronos][chronos]] package.
+
+# Add CI badges here
+
+#+BEGIN_HTML
+#+END_HTML
+** Table of contents
+:PROPERTIES:
+:TOC: siblings
+:END:
+-  [[#usage][Usage]]
+  -  [[#clock-journal-dynamic-block][clock-journal Dynamic block]]
+    -  [[#grouping-behaviour][Grouping behaviour]]
+    -  [[#default-parameters][Default parameters]]
+
+** Usage
+:PROPERTIES:
+:CREATED_TIME: [2021-02-07 Sun 19:39]
+:END:
+*** =clock-journal= Dynamic block
+:PROPERTIES:
+:CREATED_TIME: [2021-02-07 Sun 19:50]
+:END:
+This package provides =clock-journal= dynamic block which summarises clock activities during a certain period.
+
+By default, it determines the period from the heading of the current entry or its ancestors.
+You can combine it with [[https://github.com/bastibe/org-journal][org-journal]] or [[https://github.com/akirak/org-reverse-datetree][org-reverse-datetree]] to display the activity of the day.
+Put the following block call to a daily entry and run =C-c C-c= to insert the summary of the activities:
+
+#+begin_src org
+  ,#+BEGIN: clock-journal
+  ,#+END:
+#+end_src
+**** Grouping behaviour
+:PROPERTIES:
+:CREATED_TIME: [2021-02-07 Sun 19:50]
+:END:
+It also supports grouping. If you add =:group category= to the parameters, it displays sums of categories. Likewise, if you add =:group tag=, it groups headings by tags defined in =org-chronos-tag-groups= variable.
+**** Default parameters
+:PROPERTIES:
+:CREATED_TIME: [2021-02-07 Sun 19:50]
+:END:
+You can override the default parameters of the dynamic block by setting =org-chronos-log-dblock-defaults= variable.
