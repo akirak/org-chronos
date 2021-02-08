@@ -22,9 +22,7 @@
 
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
-  marker olp tags category todo-state link clock-entries
-  ;; Optionally set after parsing
-  group)
+  marker olp tags category todo-state link clock-entries)
 
 ;;;; Custom variables
 
@@ -44,6 +42,17 @@ entries. This may lead to generating IDs if you have turned on
 (defcustom org-chronos-tag-groups nil
   "List of tags used to group headings."
   :type '(repeat string))
+
+(defcustom org-chronos-auto-export nil
+  "Whether to export the log data on every evaluation."
+  :type 'boolean)
+
+(defcustom org-chronos-export-root-directory nil
+  "Destination directory of exporting.
+
+Files are saved to subdirectories of this directory based on the
+time span."
+  :type 'directory)
 
 ;;;; Parsing
 
@@ -244,6 +253,59 @@ FIXME: FILES, FROM, and TO."
     (insert (format "| *Total* | %s |\n" (org-duration-from-minutes total))))
   (org-table-align))
 
+;;;; Exporting
+(cl-defun org-chronos--build-object-for-json (&key span start end elements
+                                                   group-type groups
+                                                   files)
+  `((source . ((files . ,(apply #'vector files))))
+    (range . ((span . ,(symbol-name span))
+              (start . ,(ts-format start))
+              (end . ,(ts-format end))))
+    (data . ((headings . ,(apply #'vector
+                                 (-map #'org-chronos--json-serializable-object
+                                       elements)))
+             (groups . ,(when groups
+                          `((,group-type
+                             . ,(apply #'vector
+                                       (-map (pcase-lambda (`(,group . ,elements))
+                                               `((group-type . ,(symbol-name group-type))
+                                                 (group-name . ,group)
+                                                 (headings
+                                                  . ,(apply #'vector
+                                                            (-map #'org-chronos--json-serializable-object
+                                                                  elements)))))
+                                             groups))))))))))
+
+(defgeneric org-chronos--json-serializable-object (x))
+
+(defmethod org-chronos--json-serializable-object ((x org-chronos-heading-element))
+  (let ((marker (org-chronos-heading-element-marker x))
+        (olp (-map #'org-link-display-format (org-chronos-heading-element-olp x)))
+        (tags (org-chronos-heading-element-tags x))
+        (category (org-chronos-heading-element-category x))
+        (todo-state (org-chronos-heading-element-todo-state x))
+        (link (org-chronos-heading-element-link x))
+        (clock-entries (org-chronos-heading-element-clock-entries x)))
+    `((buffer . ,(buffer-name (marker-buffer marker)))
+      (position . ,(marker-position marker))
+      (title . ,(-last-item olp))
+      (outline . ,(apply #'vector olp))
+      (tags . ,(apply #'vector tags))
+      (link . ,(car link))
+      (category . ,category)
+      (todo . ,todo-state)
+      (clocks . ,(apply #'vector
+                        (-map #'org-chronos--json-serializable-object
+                              clock-entries))))))
+
+(defmethod org-chronos--json-serializable-object ((x org-chronos-clock-range))
+  (let ((start (org-chronos-clock-range-start x))
+        (end (org-chronos-clock-range-end x))
+        (duration (org-chronos-clock-range-duration-minutes x)))
+    `((start . ,(ts-format start))
+      (end . ,(ts-format end))
+      (duration . ,(ceiling duration)))))
+
 ;;;; Other utility functions
 
 (defun org-chronos--start-of-clocks (range-list)
@@ -268,11 +330,12 @@ FIXME: FILES, FROM, and TO."
                           (org-chronos--ts-from-string start)
                         (org-chronos--find-date-in-heading)))
          (range-end (ts-adjust span 1 range-start))
+         (concrete-files (cl-etypecase files
+                           (fbound (funcall files))
+                           (list files)
+                           (string files)))
          (elements (org-chronos--search-headings-with-clock
-                    (cl-etypecase files
-                      (fbound (funcall files))
-                      (list files)
-                      (string files))
+                    concrete-files
                     range-start range-end))
          (group (plist-get params :group))
          (group (if (stringp group)
@@ -295,7 +358,30 @@ FIXME: FILES, FROM, and TO."
                                                 (day "%R")
                                                 (month "%F"))
                                               :todo-state t
-                                              :show-total t)))
+                                              :show-total t)
+    (when org-chronos-auto-export
+      (unless (and (stringp org-chronos-export-root-directory)
+                   (file-directory-p org-chronos-export-root-directory))
+        (error "Directory org-chronos-export-root-directory is nil or does not exist"))
+      (let* ((dir (expand-file-name (format "%s/" span)
+                                    org-chronos-export-root-directory))
+             (filename (cl-ecase span
+                         (day (ts-format "%Y%m%d.json" range-start))
+                         (month (ts-format "%Y%m.json" range-start)))))
+        (unless (file-directory-p dir)
+          (make-directory dir))
+        (with-temp-buffer
+          (insert (json-serialize
+                   (org-chronos--build-object-for-json
+                    :span span
+                    :start range-start
+                    :end range-end
+                    :elements elements
+                    :group-type group
+                    :groups groups
+                    :files concrete-files)))
+          (write-region (point-min) (point-max)
+                        (expand-file-name filename dir)))))))
 
 (provide 'org-chronos-log)
 ;;; org-chronos-log.el ends here
