@@ -117,23 +117,27 @@ time span."
   "Search headings with clock entries in a given time range.
 
 FIXME: FILES, FROM, and TO."
-  (org-ql-select files
-    `(clocked :from ,from :to ,to)
-    :action
-    `(make-org-chronos-heading-element
-      :marker (point-marker)
-      :link (when org-chronos-annotate-links
-              (save-excursion
-                (org-store-link nil 'interactive)
-                (pop org-stored-links)))
-      :olp (org-get-outline-path t t)
-      :tags (org-get-tags)
-      :category (org-get-category)
-      :todo-state (org-get-todo-state)
-      :clock-entries
-      (-filter (lambda (x)
-                 (ts-in ,from ,to (org-chronos-clock-range-start x)))
-               (org-chronos--clock-entries-on-heading)))))
+  (->> (org-ql-select files
+         `(clocked :from ,from :to ,to)
+         :action
+         `(make-org-chronos-heading-element
+           :marker (point-marker)
+           :link (when org-chronos-annotate-links
+                   (save-excursion
+                     (org-store-link nil 'interactive)
+                     (pop org-stored-links)))
+           :olp (org-get-outline-path t t)
+           :tags (org-get-tags)
+           :category (org-get-category)
+           :todo-state (org-get-todo-state)
+           :clock-entries
+           (-filter (lambda (x)
+                      (ts-in ,from ,to (org-chronos-clock-range-start x)))
+                    (org-chronos--clock-entries-on-heading))))
+       ;; Since clocks may not be contained in the heading but in
+       ;; children, you have to exclude headings without clock entries
+       ;; during the period.
+       (-filter #'org-chronos-heading-element-clock-entries)))
 
 ;;;; Generic functions
 
