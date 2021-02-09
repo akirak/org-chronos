@@ -243,7 +243,7 @@ FIXME: FILES, FROM, and TO."
 (defun org-chronos--write-group-sums-as-org-table (groups group-type)
   (insert (format "| %s | Sum |\n" (cl-ecase group-type
                                      (tag "Tag")
-                                     (categorie "Category")))
+                                     (category "Category")))
           "|-------+---------|\n")
   (let ((total 0))
     (pcase-dolist (`(,group . ,elements) groups)
