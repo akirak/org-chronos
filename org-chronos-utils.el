@@ -15,8 +15,8 @@ DECODED-TIME is a list as produced by `decode-time' or
 `org-chronos-beginning-of-day' is filled."
   (ts-update (make-ts
               :year (decoded-time-year decoded-time)
-              :month (decoded-time-month decoded-time)
-              :day (decoded-time-day decoded-time)
+              :month (or (decoded-time-month decoded-time) 1)
+              :day (or (decoded-time-day decoded-time) 1)
               :hour (or (decoded-time-hour decoded-time)
                         (plist-get org-chronos-beginning-of-day :hour))
               :minute (or (decoded-time-minute decoded-time)
