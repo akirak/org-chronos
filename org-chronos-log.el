@@ -39,6 +39,10 @@ entries. This may lead to generating IDs if you have turned on
 `org-id-link-to-org-use-id'."
   :type 'boolean)
 
+(defcustom org-chronos-trim-headline 50
+  "Maximimal length of headlines in Org dynamic block output."
+  :type '(choice number null))
+
 (defcustom org-chronos-tag-groups nil
   "List of tags used to group headings."
   :type '(repeat string))
@@ -202,8 +206,13 @@ FIXME: FILES, FROM, and TO."
                                   group)
                                  ('name
                                   (if-let (link (org-chronos-heading-element-link x))
-                                      (apply #'org-link-make-string link)
-                                    (-last-item (org-chronos-heading-element-olp x))))
+                                      (org-link-make-string (car link)
+                                                            (org-chronos--trim-string-at-length
+                                                             (nth 1 link)
+                                                             org-chronos-trim-headline))
+                                    (org-chronos--trim-string-at-length
+                                     (-last-item (org-chronos-heading-element-olp x))
+                                     org-chronos-trim-headline)))
                                  ('duration
                                   (org-duration-from-minutes (org-chronos--sum-minutes x)))
                                  ('start
@@ -239,6 +248,13 @@ FIXME: FILES, FROM, and TO."
                 " |\n")))
     (delete-backward-char 1)
     (org-table-align)))
+
+(defun org-chronos--trim-string-at-length (string max-length)
+  "Trim STRING at MAX-LENGTH."
+  (if (and max-length
+           (> (length string) max-length))
+      (concat (substring string 0 (- max-length 4)) "...")
+    string))
 
 (defun org-chronos--write-group-sums-as-org-table (groups group-type)
   (insert (format "| %s | Sum |\n" (cl-ecase group-type
