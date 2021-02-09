@@ -282,53 +282,59 @@ FIXME: FILES, FROM, and TO."
       (concat (substring string 0 (- max-length 4)) "...")
     string))
 
+(defsubst org-chronos--org-table-hline (columns)
+  (concat "|-"
+          (apply #'concat (-repeat (cl-etypecase columns
+                                     (list (length columns))
+                                     (number columns))
+                                   "-+-"))
+          "-|\n"))
+
+(defsubst org-chronos--write-org-table-row (cells)
+  (declare (indent 0))
+  (insert "| " (string-join cells " | ") " |\n"))
+
 (cl-defun org-chronos--write-group-sums-as-org-table (groups group-type
                                                              &key show-percents)
   (let* ((columns (-non-nil (list group-type
                                   'duration
                                   (when show-percents
                                     'percent))))
-         (hline (concat "|-" (apply #'concat (-repeat (length columns) "-+-")) "-|\n"))
+         (hline (org-chronos--org-table-hline columns))
          (total (->> groups
                      (-map (pcase-lambda (`(_ . ,elements))
                              (-sum (-map #'org-chronos--sum-minutes elements))))
                      (-sum))))
     ;; header
-    (insert "| "
-            (mapconcat (lambda (column)
-                         (cl-case column
-                           (tag "Tag")
-                           (category "Category")
-                           (duration "Sum")
-                           (percent "%")))
-                       columns
-                       " | ")
-            " |\n"
-            hline)
+    (org-chronos--write-org-table-row
+      (-map (lambda (column)
+              (cl-case column
+                (tag "Tag")
+                (category "Category")
+                (duration "Sum")
+                (percent "%")))
+            columns))
+    (insert hline)
     ;; body
     (pcase-dolist (`(,group . ,elements) groups)
       (let ((sum (-sum (-map #'org-chronos--sum-minutes elements))))
         (when (> sum 0)
-          (insert "|"
-                  (mapconcat (lambda (column)
-                               (cl-case column
-                                 (duration (org-duration-from-minutes sum org-chronos-duration-format))
-                                 (percent (format "%.0f %%" (/ (* 100 sum) total)))
-                                 (otherwise (or group "-"))))
-                             columns
-                             " | ")
-                  " |\n"))))
+          (org-chronos--write-org-table-row
+            (-map (lambda (column)
+                    (cl-case column
+                      (duration (org-duration-from-minutes sum org-chronos-duration-format))
+                      (percent (format "%.0f %%" (/ (* 100 sum) total)))
+                      (otherwise (or group "-"))))
+                  columns)))))
     ;; footer
-    (insert hline
-            "| "
-            (mapconcat (lambda (column)
-                         (cl-case column
-                           (duration (org-duration-from-minutes total org-chronos-duration-format))
-                           (percent "100 %")
-                           (otherwise "*Total*")))
-                       columns
-                       " | ")
-            " |\n")
+    (insert hline)
+    (org-chronos--write-org-table-row
+      (-map (lambda (column)
+              (cl-case column
+                (duration (org-duration-from-minutes total org-chronos-duration-format))
+                (percent "100 %")
+                (otherwise "*Total*")))
+            columns))
     (delete-backward-char 1)
     (org-table-align)))
 
