@@ -282,23 +282,55 @@ FIXME: FILES, FROM, and TO."
       (concat (substring string 0 (- max-length 4)) "...")
     string))
 
-(defun org-chronos--write-group-sums-as-org-table (groups group-type)
-  (insert (format "| %s | Sum |\n" (cl-ecase group-type
-                                     (tag "Tag")
-                                     (category "Category")))
-          "|-------+---------|\n")
-  (let ((total 0))
+(cl-defun org-chronos--write-group-sums-as-org-table (groups group-type
+                                                             &key show-percents)
+  (let* ((columns (-non-nil (list group-type
+                                  'duration
+                                  (when show-percents
+                                    'percent))))
+         (hline (concat "|-" (apply #'concat (-repeat (length columns) "-+-")) "-|\n"))
+         (total (->> groups
+                     (-map (pcase-lambda (`(_ . ,elements))
+                             (-sum (-map #'org-chronos--sum-minutes elements))))
+                     (-sum))))
+    ;; header
+    (insert "| "
+            (mapconcat (lambda (column)
+                         (cl-case column
+                           (tag "Tag")
+                           (category "Category")
+                           (duration "Sum")
+                           (percent "%")))
+                       columns
+                       " | ")
+            " |\n"
+            hline)
+    ;; body
     (pcase-dolist (`(,group . ,elements) groups)
       (let ((sum (-sum (-map #'org-chronos--sum-minutes elements))))
         (when (> sum 0)
-          (insert (format "| %s | %s |\n"
-                          (or group "-")
-                          (org-duration-from-minutes sum org-chronos-duration-format))))
-        (cl-incf total sum)))
-    (insert "|-------+---------|\n")
-    (insert (format "| *Total* | %s |\n" (org-duration-from-minutes total org-chronos-duration-format))))
-  (delete-backward-char 1)
-  (org-table-align))
+          (insert "|"
+                  (mapconcat (lambda (column)
+                               (cl-case column
+                                 (duration (org-duration-from-minutes sum org-chronos-duration-format))
+                                 (percent (format "%.0f %%" (/ (* 100 sum) total)))
+                                 (otherwise (or group "-"))))
+                             columns
+                             " | ")
+                  " |\n"))))
+    ;; footer
+    (insert hline
+            "| "
+            (mapconcat (lambda (column)
+                         (cl-case column
+                           (duration (org-duration-from-minutes total org-chronos-duration-format))
+                           (percent "100 %")
+                           (otherwise "*Total*")))
+                       columns
+                       " | ")
+            " |\n")
+    (delete-backward-char 1)
+    (org-table-align)))
 
 ;;;; Exporting
 (cl-defun org-chronos--build-object-for-json (&key span start end elements
@@ -392,6 +424,7 @@ FIXME: FILES, FROM, and TO."
                     concrete-files
                     range-start range-end))
          (group (plist-get params :group))
+         (group-percents (plist-get params :group-percents))
          (group (if (stringp group)
                     (intern group)
                   group))
@@ -404,7 +437,8 @@ FIXME: FILES, FROM, and TO."
             (org-chronos--describe-range span range-start)
             "\n")
     (when (and group (member "groups" sections))
-      (org-chronos--write-group-sums-as-org-table groups group)
+      (org-chronos--write-group-sums-as-org-table groups group
+                                                  :show-percents group-percents)
       (setq margin t))
     (when (member "entries" sections)
       (when margin
