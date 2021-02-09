@@ -446,45 +446,48 @@ FIXME: FILES, FROM, and TO."
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
             "\n")
-    (when (and group (member "groups" sections))
-      (org-chronos--write-group-sums-as-org-table groups group
-                                                  :show-percents group-percents)
-      (setq margin t))
-    (when (member "entries" sections)
-      (when margin
-        (insert "\n\n")
-        (setq margin nil))
-      (org-chronos--write-elements-as-org-table (or groups elements)
-                                                :grouped group
-                                                :range-format
-                                                (cl-ecase span
-                                                  (day "%R")
-                                                  (month "%F"))
-                                                :todo-state t
-                                                :show-total t))
-    (when org-chronos-auto-export
-      (unless (and (stringp org-chronos-export-root-directory)
-                   (file-directory-p org-chronos-export-root-directory))
-        (error "Directory org-chronos-export-root-directory is nil or does not exist"))
-      (let* ((dir (expand-file-name (format "%s/" span)
-                                    org-chronos-export-root-directory))
-             (filename (cl-ecase span
-                         (day (ts-format "%Y%m%d.json" range-start))
-                         (month (ts-format "%Y%m.json" range-start)))))
-        (unless (file-directory-p dir)
-          (make-directory dir))
-        (with-temp-buffer
-          (insert (json-serialize
-                   (org-chronos--build-object-for-json
-                    :span span
-                    :start range-start
-                    :end range-end
-                    :elements elements
-                    :group-type group
-                    :groups groups
-                    :files concrete-files)))
-          (write-region (point-min) (point-max)
-                        (expand-file-name filename dir)))))))
+    (if (null elements)
+        (insert "There is no activity during this period yet.")
+      (when (and group (member "groups" sections))
+        (org-chronos--write-group-sums-as-org-table groups group
+                                                    :show-percents group-percents)
+        (setq margin t))
+      (when (member "entries" sections)
+        (when margin
+          (insert "\n\n")
+          (setq margin nil))
+        (org-chronos--write-elements-as-org-table
+         (or groups elements)
+         :grouped group
+         :range-format
+         (cl-ecase span
+           (day "%R")
+           (month "%F"))
+         :todo-state t
+         :show-total t))
+      (when org-chronos-auto-export
+        (unless (and (stringp org-chronos-export-root-directory)
+                     (file-directory-p org-chronos-export-root-directory))
+          (error "Directory org-chronos-export-root-directory is nil or does not exist"))
+        (let* ((dir (expand-file-name (format "%s/" span)
+                                      org-chronos-export-root-directory))
+               (filename (cl-ecase span
+                           (day (ts-format "%Y%m%d.json" range-start))
+                           (month (ts-format "%Y%m.json" range-start)))))
+          (unless (file-directory-p dir)
+            (make-directory dir))
+          (with-temp-buffer
+            (insert (json-serialize
+                     (org-chronos--build-object-for-json
+                      :span span
+                      :start range-start
+                      :end range-end
+                      :elements elements
+                      :group-type group
+                      :groups groups
+                      :files concrete-files)))
+            (write-region (point-min) (point-max)
+                          (expand-file-name filename dir))))))))
 
 (provide 'org-chronos-log)
 ;;; org-chronos-log.el ends here
