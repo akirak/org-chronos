@@ -301,9 +301,14 @@ FIXME: FILES, FROM, and TO."
                                   (when show-percents
                                     'percent))))
          (hline (org-chronos--org-table-hline columns))
-         (total (->> groups
-                     (-map (pcase-lambda (`(_ . ,elements))
-                             (-sum (-map #'org-chronos--sum-minutes elements))))
+         (groups-with-sums (->> (-map (pcase-lambda (`(,group . ,elements))
+                                        (list group
+                                              elements
+                                              (-sum (-map #'org-chronos--sum-minutes elements))))
+                                      groups)
+                                (-sort (-on #'> (-partial #'nth 2)))))
+         (total (->> groups-with-sums
+                     (--map (nth 2 it))
                      (-sum))))
     ;; header
     (org-chronos--write-org-table-row
@@ -316,16 +321,15 @@ FIXME: FILES, FROM, and TO."
             columns))
     (insert hline)
     ;; body
-    (pcase-dolist (`(,group . ,elements) groups)
-      (let ((sum (-sum (-map #'org-chronos--sum-minutes elements))))
-        (when (> sum 0)
-          (org-chronos--write-org-table-row
-            (-map (lambda (column)
-                    (cl-case column
-                      (duration (org-duration-from-minutes sum org-chronos-duration-format))
-                      (percent (format "%.0f %%" (/ (* 100 sum) total)))
-                      (otherwise (or group "-"))))
-                  columns)))))
+    (pcase-dolist (`(,group ,elements ,sum) groups-with-sums)
+      (when (> sum 0)
+        (org-chronos--write-org-table-row
+          (-map (lambda (column)
+                  (cl-case column
+                    (duration (org-duration-from-minutes sum org-chronos-duration-format))
+                    (percent (format "%.0f %%" (/ (* 100 sum) total)))
+                    (otherwise (or group "-"))))
+                columns))))
     ;; footer
     (insert hline)
     (org-chronos--write-org-table-row
