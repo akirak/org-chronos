@@ -27,7 +27,8 @@
 ;;;; Custom variables
 
 (defcustom org-chronos-log-dblock-defaults
-  (list :span 'day :files #'org-agenda-files)
+  (list :span 'day :files #'org-agenda-files
+        :sections "groups,entries")
   "Default parameters of the Org dynamic block."
   :type 'plist)
 
@@ -346,6 +347,13 @@ FIXME: FILES, FROM, and TO."
   (let* ((params (org-combine-plists org-chronos-log-dblock-defaults params))
          (span (plist-get params :span))
          (files (plist-get params :files))
+         (sections-raw (plist-get params :sections))
+         (sections (if (listp sections-raw)
+                       sections-raw
+                     (-> (cl-etypecase sections-raw
+                           (string sections-raw)
+                           (symbol (symbol-name sections-raw)))
+                         (split-string ","))))
          (range-start (if-let (start (plist-get params :start))
                           (org-chronos--ts-from-string start)
                         (org-chronos--find-date-in-heading)))
@@ -364,21 +372,26 @@ FIXME: FILES, FROM, and TO."
          (groups (when group
                    (cl-ecase group
                      (tag (org-chronos--group-elements-by-tag elements))
-                     (category (org-chronos--group-elements-by-category elements))))))
+                     (category (org-chronos--group-elements-by-category elements)))))
+         margin)
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
             "\n")
-    (when group
+    (when (and group (member "groups" sections))
       (org-chronos--write-group-sums-as-org-table groups group)
-      (insert "\n"))
-    (org-chronos--write-elements-as-org-table (or groups elements)
-                                              :grouped group
-                                              :range-format
-                                              (cl-ecase span
-                                                (day "%R")
-                                                (month "%F"))
-                                              :todo-state t
-                                              :show-total t)
+      (setq margin t))
+    (when (member "entries" sections)
+      (when margin
+        (insert "\n")
+        (setq margin nil))
+      (org-chronos--write-elements-as-org-table (or groups elements)
+                                                :grouped group
+                                                :range-format
+                                                (cl-ecase span
+                                                  (day "%R")
+                                                  (month "%F"))
+                                                :todo-state t
+                                                :show-total t))
     (when org-chronos-auto-export
       (unless (and (stringp org-chronos-export-root-directory)
                    (file-directory-p org-chronos-export-root-directory))
