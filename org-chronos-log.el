@@ -452,7 +452,7 @@ FIXME: FILES, FROM, and TO."
       (setq margin t))
     (when (member "entries" sections)
       (when margin
-        (insert "\n")
+        (insert "\n\n")
         (setq margin nil))
       (org-chronos--write-elements-as-org-table (or groups elements)
                                                 :grouped group
