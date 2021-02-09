@@ -272,6 +272,7 @@ FIXME: FILES, FROM, and TO."
         (cl-incf total sum)))
     (insert "|-------+---------|\n")
     (insert (format "| *Total* | %s |\n" (org-duration-from-minutes total))))
+  (delete-backward-char 1)
   (org-table-align))
 
 ;;;; Exporting
