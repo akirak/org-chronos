@@ -56,6 +56,17 @@ When this variable is set to a list of Org categories, items that
   and the output."
   :type '(repeat string))
 
+(defcustom org-chronos-duration-format 'h:mm
+  "Custom format used in this package.
+
+If this variable is non-nil, it is used as the format for
+converting durations to strings in this package.
+
+If it is nil, the default value is used.
+
+See `org-duration-format' for possible values of this variable."
+  :type 'sexp)
+
 (defcustom org-chronos-auto-export nil
   "Whether to export the log data on every evaluation."
   :type 'boolean)
@@ -228,7 +239,8 @@ FIXME: FILES, FROM, and TO."
                                      (-last-item (org-chronos-heading-element-olp x))
                                      org-chronos-trim-headline)))
                                  ('duration
-                                  (org-duration-from-minutes (org-chronos--sum-minutes x)))
+                                  (org-duration-from-minutes (org-chronos--sum-minutes x)
+                                                             org-chronos-duration-format))
                                  ('start
                                   (ts-format range-format
                                              (org-chronos--start-of-clocks
@@ -257,7 +269,7 @@ FIXME: FILES, FROM, and TO."
         (insert "| "
                 (string-join (-repeat (1- n) " | "))
                 " *Total* | "
-                (org-duration-from-minutes total)
+                (org-duration-from-minutes total org-chronos-duration-format)
                 (string-join (-repeat (1- (- (length columns) n)) " | "))
                 " |\n")))
     (delete-backward-char 1)
@@ -281,10 +293,10 @@ FIXME: FILES, FROM, and TO."
         (when (> sum 0)
           (insert (format "| %s | %s |\n"
                           (or group "-")
-                          (org-duration-from-minutes sum))))
+                          (org-duration-from-minutes sum org-chronos-duration-format))))
         (cl-incf total sum)))
     (insert "|-------+---------|\n")
-    (insert (format "| *Total* | %s |\n" (org-duration-from-minutes total))))
+    (insert (format "| *Total* | %s |\n" (org-duration-from-minutes total org-chronos-duration-format))))
   (delete-backward-char 1)
   (org-table-align))
 
