@@ -48,6 +48,14 @@ entries. This may lead to generating IDs if you have turned on
   "List of tags used to group headings."
   :type '(repeat string))
 
+(defcustom org-chronos-ignored-categories nil
+  "List of categories that are excluded from the input data.
+
+When this variable is set to a list of Org categories, items that
+  belong to one of the categories are excluded from statistics
+  and the output."
+  :type '(repeat string))
+
 (defcustom org-chronos-auto-export nil
   "Whether to export the log data on every evaluation."
   :type 'boolean)
@@ -139,10 +147,15 @@ FIXME: FILES, FROM, and TO."
            (-filter (lambda (x)
                       (ts-in ,from ,to (org-chronos-clock-range-start x)))
                     (org-chronos--clock-entries-on-heading))))
-       ;; Since clocks may not be contained in the heading but in
-       ;; children, you have to exclude headings without clock entries
-       ;; during the period.
-       (-filter #'org-chronos-heading-element-clock-entries)))
+       (-filter #'org-chronos--meaningful-element-p)))
+
+(defun org-chronos--meaningful-element-p (element)
+  ;; Since clocks may not be contained in the heading but in
+  ;; children, you have to exclude headings without clock entries
+  ;; during the period.
+  (and (org-chronos-heading-element-clock-entries element)
+       (not (member (org-chronos-heading-element-category element)
+                    org-chronos-ignored-categories))))
 
 ;;;; Generic functions
 
