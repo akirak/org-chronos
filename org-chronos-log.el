@@ -423,7 +423,10 @@ FIXME: FILES, FROM, and TO."
                            (symbol (symbol-name sections-raw)))
                          (split-string ","))))
          (range-start (if-let (start (plist-get params :start))
-                          (org-chronos--ts-from-string start)
+                          (org-chronos--ts-from-decoded-time
+                           (parse-time-string (cl-etypecase start
+                                                (symbol (symbol-name start))
+                                                (string start))))
                         (org-chronos--find-date-in-heading)))
          (range-end (ts-adjust span 1 range-start))
          (concrete-files (cl-etypecase files
