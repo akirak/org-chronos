@@ -144,20 +144,22 @@ FIXME: FILES, FROM, and TO."
   (->> (org-ql-select files
          `(clocked :from ,from :to ,to)
          :action
-         `(make-org-chronos-heading-element
-           :marker (point-marker)
-           :link (when org-chronos-annotate-links
-                   (save-excursion
-                     (org-store-link nil 'interactive)
-                     (pop org-stored-links)))
-           :olp (org-get-outline-path t t)
-           :tags (org-get-tags)
-           :category (org-get-category)
-           :todo-state (org-get-todo-state)
-           :clock-entries
-           (-filter (lambda (x)
-                      (ts-in ,from ,to (org-chronos-clock-range-start x)))
-                    (org-chronos--clock-entries-on-heading))))
+         `(org-save-outline-visibility t
+            (org-show-entry)
+            (make-org-chronos-heading-element
+             :marker (point-marker)
+             :link (when org-chronos-annotate-links
+                     (save-excursion
+                       (org-store-link nil 'interactive)
+                       (pop org-stored-links)))
+             :olp (org-get-outline-path t t)
+             :tags (org-get-tags)
+             :category (org-get-category)
+             :todo-state (org-get-todo-state)
+             :clock-entries
+             (-filter (lambda (x)
+                        (ts-in ,from ,to (org-chronos-clock-range-start x)))
+                      (org-chronos--clock-entries-on-heading)))))
        (-filter #'org-chronos--meaningful-element-p)))
 
 (defun org-chronos--meaningful-element-p (element)
