@@ -32,6 +32,13 @@
   "Default parameters of the Org dynamic block."
   :type 'plist)
 
+(defcustom org-chronos-scan-containing-file nil
+  "Whether to include the file that contains the dblock.
+
+When this variable is non-nil, the dynamic block adds the
+containing file to the source files."
+  :type 'boolean)
+
 (defcustom org-chronos-annotate-links t
   "Whether to decorate headline names with links.
 
@@ -432,10 +439,13 @@ FIXME: FILES, FROM, and TO."
                                       (string start))))
                         (org-chronos--find-date-in-heading)))
          (range-end (ts-adjust span 1 range-start))
-         (concrete-files (cl-etypecase files
-                           (fbound (funcall files))
-                           (list files)
-                           (string files)))
+         (concrete-files (-> (cl-etypecase files
+                               (fbound (funcall files))
+                               (list files)
+                               (string files))
+                             (append (when org-chronos-scan-containing-file
+                                       (list (buffer-file-name))))
+                             (cl-delete-duplicates :test #'file-equal-p)))
          (elements (org-chronos--search-headings-with-clock
                     concrete-files
                     range-start range-end))
