@@ -1,14 +1,15 @@
 * org-chronos
+#+BEGIN_HTML
+<a href="https://github.com/akirak/org-chronos/actions/workflows/ci.yml">
+<img src="https://github.com/akirak/org-chronos/actions/workflows/ci.yml/badge.svg">
+</a>
+#+END_HTML
+
 Org-Chronos is an opinionated time management layer for the Emacs Org mode.
 
 This is currently a work-in-progress, and I plan on adding more features.
 
 Disclaimer: This package is not based on [[https://github.com/dxknight/chronos][chronos]] package.
-
-# Add CI badges here
-
-#+BEGIN_HTML
-#+END_HTML
 ** Table of contents
 :PROPERTIES:
 :TOC: siblings
