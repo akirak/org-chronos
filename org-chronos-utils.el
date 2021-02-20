@@ -1,11 +1,41 @@
 ;;; org-chronos-utils.el --- Utilities -*- lexical-binding: t -*-
 
+;; Copyright (C) 2021 Akira Komamura
+
+;; Author: Akira Komamura <akira.komamura@gmail.com>
+;; Version: 0.1
+;; URL: https://github.com/akirak/org-chronos
+
+;; This file is not part of GNU Emacs.
+
+;;; License:
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; FIXME
+
+;;; Code:
+
 (require 'ts)
 (require 'org)
 
 (defcustom org-chronos-beginning-of-day '(:hour 5 :minute 0 :second 0)
   "Plist that represents the beginning time of day."
-  :type 'plist)
+  :type 'plist
+  :group 'org-chronos)
 
 (defcustom org-chronos-parse-date-function
   #'org-chronos-parse-date-1
@@ -15,7 +45,8 @@ This must be a function that is compliant with
 `parse-time-string'. That is, it takes a string as an argument
 and returns a list of decoded time fields, as returned by
 `decode-time'."
-  :type 'function)
+  :type 'function
+  :group 'org-chronos)
 
 (defun org-chronos-parse-date-1 (string)
   "Parse STRING as a date."
@@ -79,8 +110,11 @@ DECODED-TIME is a list as produced by `decode-time' or
         (unless (org-up-heading-safe)
           (throw 'finish nil))))))
 
-(defmethod org-chronos--describe-range (span ts)
-  "Format a range starting at TS."
+(defun org-chronos--describe-range (span ts)
+  "Return a string which represents a certain period of time.
+
+This function builds a string which consists of a preposition for
+SPAN and the concisely formatted time at TS."
   (cl-ecase span
     (day (concat "on " (ts-format "%F" ts)))
     (month (concat "in " (ts-format "%Y-%m" ts)))))

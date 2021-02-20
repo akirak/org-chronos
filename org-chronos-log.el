@@ -1,5 +1,34 @@
 ;;; org-chronos-log.el --- Logging facility -*- lexical-binding: t -*-
 
+;; Copyright (C) 2021 Akira Komamura
+
+;; Author: Akira Komamura <akira.komamura@gmail.com>
+;; Version: 0.1
+;; URL: https://github.com/akirak/org-chronos
+
+;; This file is not part of GNU Emacs.
+
+;;; License:
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; FIXME
+
+;;; Code:
+
 (require 'dash)
 (require 'org-ql)
 (require 'org-element)
@@ -30,6 +59,7 @@
   (list :span 'day :files #'org-agenda-files
         :sections "groups,entries")
   "Default parameters of the Org dynamic block."
+  :group 'org-chronos
   :type 'plist)
 
 (defcustom org-chronos-scan-containing-file nil
@@ -37,6 +67,7 @@
 
 When this variable is non-nil, the dynamic block adds the
 containing file to the source files."
+  :group 'org-chronos
   :type 'boolean)
 
 (defcustom org-chronos-annotate-links t
@@ -45,14 +76,17 @@ containing file to the source files."
 Note that a link is produced on every entry having clock
 entries. This may lead to generating IDs if you have turned on
 `org-id-link-to-org-use-id'."
+  :group 'org-chronos
   :type 'boolean)
 
 (defcustom org-chronos-trim-headline 50
   "Maximimal length of headlines in Org dynamic block output."
+  :group 'org-chronos
   :type '(choice number null))
 
 (defcustom org-chronos-tag-groups nil
   "List of tags used to group headings."
+  :group 'org-chronos
   :type '(repeat string))
 
 (defcustom org-chronos-ignored-categories nil
@@ -61,10 +95,12 @@ entries. This may lead to generating IDs if you have turned on
 When this variable is set to a list of Org categories, items that
   belong to one of the categories are excluded from statistics
   and the output."
+  :group 'org-chronos
   :type '(repeat string))
 
 (defcustom org-chronos-clock-threshold nil
   "Threshold of duration to display an item in blocks."
+  :group 'org-chronos
   :type '(choice null number))
 
 (defcustom org-chronos-duration-format 'h:mm
@@ -76,10 +112,12 @@ converting durations to strings in this package.
 If it is nil, the default value is used.
 
 See `org-duration-format' for possible values of this variable."
+  :group 'org-chronos
   :type 'sexp)
 
 (defcustom org-chronos-auto-export nil
   "Whether to export the log data on every evaluation."
+  :group 'org-chronos
   :type 'boolean)
 
 (defcustom org-chronos-export-root-directory nil
@@ -87,6 +125,7 @@ See `org-duration-format' for possible values of this variable."
 
 Files are saved to subdirectories of this directory based on the
 time span."
+  :group 'org-chronos
   :type 'directory)
 
 ;;;; Parsing
@@ -174,6 +213,7 @@ FIXME: FILES, FROM, and TO."
        (-filter #'org-chronos--meaningful-element-p)))
 
 (defun org-chronos--meaningful-element-p (element)
+  "Check if ELEMENT will be meaningful in the report."
   ;; Since clocks may not be contained in the heading but in
   ;; children, you have to exclude headings without clock entries
   ;; during the period.
@@ -183,12 +223,15 @@ FIXME: FILES, FROM, and TO."
 
 ;;;; Generic functions
 
-(defgeneric org-chronos--sum-minutes (x)
+(cl-defgeneric org-chronos--sum-minutes (x)
   "Return the clock sum on X in minutes.")
 
-(defmethod org-chronos--sum-minutes ((x org-chronos-clock-range))
+(cl-defmethod org-chronos--sum-minutes ((x org-chronos-clock-range))
+  "Return the clock sum on X in minutes."
   (org-chronos-clock-range-duration-minutes x))
-(defmethod org-chronos--sum-minutes ((x org-chronos-heading-element))
+
+(cl-defmethod org-chronos--sum-minutes ((x org-chronos-heading-element))
+  "Return the clock sum on X in minutes."
   (->> (org-chronos-heading-element-clock-entries x)
        (-map #'org-chronos--sum-minutes)
        (-sum)))
@@ -221,6 +264,12 @@ FIXME: FILES, FROM, and TO."
                                                     range-format
                                                     todo-state
                                                     show-total)
+  "Insert elements to the buffer as an Org table.
+
+ELEMENTS is a list of `org-chronos-heading-element'.
+
+GROUPED, RANGE-FORMAT, TODO-STATE, and SHOW-TOTAL specifies
+output options."
   (let* ((columns (-non-nil (list (when grouped '(group "Group"))
                                   '(name "Task")
                                   '(duration "Duration")
@@ -287,7 +336,7 @@ FIXME: FILES, FROM, and TO."
                 (org-duration-from-minutes total org-chronos-duration-format)
                 (string-join (-repeat (1- (- (length columns) n)) " | "))
                 " |\n")))
-    (delete-backward-char 1)
+    (delete-char -1)
     (org-table-align)))
 
 (defun org-chronos--trim-string-at-length (string max-length)
@@ -298,6 +347,7 @@ FIXME: FILES, FROM, and TO."
     string))
 
 (defsubst org-chronos--org-table-hline (columns)
+  "Return a separator for a table with COLUMNS."
   (concat "|-"
           (apply #'concat (-repeat (cl-etypecase columns
                                      (list (length columns))
@@ -306,11 +356,15 @@ FIXME: FILES, FROM, and TO."
           "-|\n"))
 
 (defsubst org-chronos--write-org-table-row (cells)
+  "Insert CELLS to the buffer as an Org table row."
   (declare (indent 0))
   (insert "| " (string-join cells " | ") " |\n"))
 
 (cl-defun org-chronos--write-group-sums-as-org-table (groups group-type
                                                              &key show-percents)
+  "Insert groups to the buffer as an Org table.
+
+FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   (let* ((columns (-non-nil (list group-type
                                   'duration
                                   (when show-percents
@@ -336,7 +390,7 @@ FIXME: FILES, FROM, and TO."
             columns))
     (insert hline)
     ;; body
-    (pcase-dolist (`(,group ,elements ,sum) groups-with-sums)
+    (pcase-dolist (`(,group ,_elements ,sum) groups-with-sums)
       (when (> sum 0)
         (org-chronos--write-org-table-row
           (-map (lambda (column)
@@ -354,13 +408,14 @@ FIXME: FILES, FROM, and TO."
                 (percent "100 %")
                 (otherwise "*Total*")))
             columns))
-    (delete-backward-char 1)
+    (delete-char -1)
     (org-table-align)))
 
 ;;;; Exporting
 (cl-defun org-chronos--build-object-for-json (&key span start end elements
                                                    group-type groups
                                                    files)
+  "FIXME: SPAN START END ELEMENTS GROUP-TYPE GROUPS FILES."
   `((source . ((files . ,(apply #'vector files))))
     (range . ((span . ,(symbol-name span))
               (start . ,(ts-format start))
@@ -380,9 +435,11 @@ FIXME: FILES, FROM, and TO."
                                                                   elements)))))
                                              groups))))))))))
 
-(defgeneric org-chronos--json-serializable-object (x))
+(cl-defgeneric org-chronos--json-serializable-object (x)
+  "Convert X to an object that can be serialized to JSON.")
 
-(defmethod org-chronos--json-serializable-object ((x org-chronos-heading-element))
+(cl-defmethod org-chronos--json-serializable-object ((x org-chronos-heading-element))
+  "Convert X to an object that can be serialized to JSON."
   (let ((marker (org-chronos-heading-element-marker x))
         (olp (-map #'org-link-display-format (org-chronos-heading-element-olp x)))
         (tags (org-chronos-heading-element-tags x))
@@ -402,7 +459,8 @@ FIXME: FILES, FROM, and TO."
                         (-map #'org-chronos--json-serializable-object
                               clock-entries))))))
 
-(defmethod org-chronos--json-serializable-object ((x org-chronos-clock-range))
+(cl-defmethod org-chronos--json-serializable-object ((x org-chronos-clock-range))
+  "Convert X to an object that can be serialized to JSON."
   (let ((start (org-chronos-clock-range-start x))
         (end (org-chronos-clock-range-end x))
         (duration (org-chronos-clock-range-duration-minutes x)))
@@ -413,13 +471,17 @@ FIXME: FILES, FROM, and TO."
 ;;;; Other utility functions
 
 (defun org-chronos--start-of-clocks (range-list)
-  "Return the first start time of many clock events."
+  "Return the first start time of many clock events.
+
+RANGE-LIST should be a list of `org-chronos-clock-range' objects."
   (->> (-map #'org-chronos-clock-range-start range-list)
        (-sort #'ts<)
        (car)))
 
 (defun org-chronos--end-of-clocks (range-list)
-  "Return the last end time of many clock events."
+  "Return the last end time of many clock events.
+
+RANGE-LIST should be a list of `org-chronos-clock-range' objects."
   (->> (-map #'org-chronos-clock-range-end range-list)
        (-sort #'ts>)
        (car)))
@@ -427,6 +489,10 @@ FIXME: FILES, FROM, and TO."
 ;;;; Dynamic block
 
 (defun org-dblock-write:clock-journal (params)
+  "Dynamic block for reporting activities for a certain period.
+
+PARAMS is a plist for dynamic block parameters. You can override
+the defaults by customizing `org-chronos-log-dblock-defaults'."
   (let* ((params (org-combine-plists org-chronos-log-dblock-defaults params))
          (span (plist-get params :span))
          (files (plist-get params :files))
