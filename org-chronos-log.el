@@ -63,6 +63,10 @@ When this variable is set to a list of Org categories, items that
   and the output."
   :type '(repeat string))
 
+(defcustom org-chronos-clock-threshold nil
+  "Threshold of duration to display an item in blocks."
+  :type '(choice null number))
+
 (defcustom org-chronos-duration-format 'h:mm
   "Custom format used in this package.
 
@@ -233,37 +237,39 @@ FIXME: FILES, FROM, and TO."
     (cl-labels
         ((write-element-row
           (x &optional group)
-          (insert "| "
-                  (mapconcat (lambda (column)
-                               (pcase (car column)
-                                 ('group
-                                  group)
-                                 ('name
-                                  (if-let (link (org-chronos-heading-element-link x))
-                                      (org-link-make-string (car link)
-                                                            (org-chronos--trim-string-at-length
-                                                             (nth 1 link)
-                                                             org-chronos-trim-headline))
-                                    (org-chronos--trim-string-at-length
-                                     (-last-item (org-chronos-heading-element-olp x))
-                                     org-chronos-trim-headline)))
-                                 ('duration
-                                  (org-duration-from-minutes (org-chronos--sum-minutes x)
-                                                             org-chronos-duration-format))
-                                 ('start
-                                  (ts-format range-format
-                                             (org-chronos--start-of-clocks
-                                              (org-chronos-heading-element-clock-entries x))))
-                                 ('end
-                                  (ts-format range-format
-                                             (org-chronos--end-of-clocks
-                                              (org-chronos-heading-element-clock-entries x))))
-                                 ('todo
-                                  (or (org-chronos-heading-element-todo-state x)
-                                      ""))))
-                             columns
-                             " | ")
-                  " |\n")
+          (unless (and org-chronos-clock-threshold
+                       (< (org-chronos--sum-minutes x) org-chronos-clock-threshold))
+            (insert "| "
+                    (mapconcat (lambda (column)
+                                 (pcase (car column)
+                                   ('group
+                                    group)
+                                   ('name
+                                    (if-let (link (org-chronos-heading-element-link x))
+                                        (org-link-make-string (car link)
+                                                              (org-chronos--trim-string-at-length
+                                                               (nth 1 link)
+                                                               org-chronos-trim-headline))
+                                      (org-chronos--trim-string-at-length
+                                       (-last-item (org-chronos-heading-element-olp x))
+                                       org-chronos-trim-headline)))
+                                   ('duration
+                                    (org-duration-from-minutes (org-chronos--sum-minutes x)
+                                                               org-chronos-duration-format))
+                                   ('start
+                                    (ts-format range-format
+                                               (org-chronos--start-of-clocks
+                                                (org-chronos-heading-element-clock-entries x))))
+                                   ('end
+                                    (ts-format range-format
+                                               (org-chronos--end-of-clocks
+                                                (org-chronos-heading-element-clock-entries x))))
+                                   ('todo
+                                    (or (org-chronos-heading-element-todo-state x)
+                                        ""))))
+                               columns
+                               " | ")
+                    " |\n"))
           (cl-incf total (org-chronos--sum-minutes x))))
       (if grouped
           (pcase-dolist (`(,group . ,group-elements) elements)
