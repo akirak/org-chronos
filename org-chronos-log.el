@@ -172,10 +172,7 @@ time span."
   (save-excursion
     (org-back-to-heading)
     (end-of-line 1)
-    (let* ((content-end (save-excursion
-                          (or (re-search-forward org-heading-regexp
-                                                 nil t)
-                              (point-max))))
+    (let* ((content-end (org-entry-end-position))
            (logbook-end (save-excursion
                           (re-search-forward org-logbook-drawer-re
                                              content-end t)))
