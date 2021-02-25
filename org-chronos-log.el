@@ -455,20 +455,22 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
     (range . ((span . ,(symbol-name span))
               (start . ,(ts-format start))
               (end . ,(ts-format end))))
-    (data . ((headings . ,(apply #'vector
-                                 (-map #'org-chronos--json-serializable-object
-                                       elements)))
-             (groups . ,(when groups
+    (meta . ((groups . ,(when groups
                           `((,group-type
                              . ,(apply #'vector
-                                       (-map (pcase-lambda (`(,group . ,elements))
-                                               `((group-type . ,(symbol-name group-type))
-                                                 (group-name . ,group)
-                                                 (headings
-                                                  . ,(apply #'vector
-                                                            (-map #'org-chronos--json-serializable-object
-                                                                  elements)))))
-                                             groups))))))))))
+                                       (-map (pcase-lambda (`(,group . ,_elements))
+                                               group)
+                                             groups))))))
+             (properties . ,(when org-chronos-logged-properties
+                              (apply #'vector
+                                     (-map (lambda (p)
+                                             (pcase p
+                                               ((pred stringp) p)
+                                               (`(,name . ,_) name)))
+                                           org-chronos-logged-properties))))))
+    (data . ((headings . ,(apply #'vector
+                                 (-map #'org-chronos--json-serializable-object
+                                       elements)))))))
 
 (cl-defgeneric org-chronos--json-serializable-object (x)
   "Convert X to an object that can be serialized to JSON.")
