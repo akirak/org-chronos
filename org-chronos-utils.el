@@ -59,7 +59,7 @@ to 0. If it is Monday, set the variable to 1."
   :group 'org-chronos)
 
 (defcustom org-chronos-day-of-week-format "%a"
-  "Week format"
+  "Day of week format."
   :type 'string
   :group 'org-chronos)
 
