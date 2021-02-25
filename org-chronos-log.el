@@ -51,9 +51,20 @@
 
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
-  marker olp tags category todo-state link clock-entries)
+  marker olp tags category properties todo-state link clock-entries)
 
 ;;;; Custom variables
+
+(defcustom org-chronos-logged-properties nil
+  "List of properties that should be recorded."
+  :group 'org-chronos
+  :type '(repeat (choice string
+                         (cons string plist))))
+
+(defcustom org-chronos-show-property-summary t
+  "Whether to produce summary tables for `org-chronos-logged-properties'."
+  :group 'org-chronos
+  :type 'boolean)
 
 (defcustom org-chronos-log-dblock-defaults
   (list :span 'day :files #'org-agenda-files
@@ -202,12 +213,26 @@ FIXME: FILES, FROM, and TO."
              :olp (org-get-outline-path t t)
              :tags (org-get-tags)
              :category (org-get-category)
+             :properties (org-chronos--collect-properties)
              :todo-state (org-get-todo-state)
              :clock-entries
              (-filter (lambda (x)
                         (ts-in ,from ,to (org-chronos-clock-range-start x)))
                       (org-chronos--clock-entries-on-heading)))))
        (-filter #'org-chronos--meaningful-element-p)))
+
+(defun org-chronos--collect-properties ()
+  "Return an alist of property values specified in `org-chronos-logged-properties'."
+  (->> org-chronos-logged-properties
+       (-map (lambda (x)
+               (pcase x
+                 ((pred stringp)
+                  (cons x (org-entry-get nil x)))
+                 (`(,name . ,plist)
+                  (cons name (org-entry-get nil name
+                                            (plist-get plist :inherit)
+                                            (plist-get plist :literal-nil)))))))
+       (-filter #'cdr)))
 
 (defun org-chronos--meaningful-element-p (element)
   "Check if ELEMENT will be meaningful in the report."
@@ -253,6 +278,18 @@ FIXME: FILES, FROM, and TO."
 (defun org-chronos--group-elements-by-category (elements)
   "Group ELEMENTS by categories."
   (-group-by #'org-chronos-heading-element-category elements))
+
+(defun org-chronos--group-elements-by-property (property elements)
+  "Group elements by a property.
+
+This uses the values of PROPERTY to group ELEMENTS."
+  (->> elements
+       (-group-by (lambda (x)
+                    (->> (org-chronos-heading-element-properties x)
+                         (assoc property)
+                         (cdr))))
+       ;; Ignore nil groups
+       (-filter #'car)))
 
 ;;;; Org output functions
 
@@ -383,7 +420,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
                 (tag "Tag")
                 (category "Category")
                 (duration "Sum")
-                (percent "%")))
+                (percent "%")
+                (otherwise (format "%s" column))))
             columns))
     (insert hline)
     ;; body
@@ -441,6 +479,7 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
         (olp (-map #'org-link-display-format (org-chronos-heading-element-olp x)))
         (tags (org-chronos-heading-element-tags x))
         (category (org-chronos-heading-element-category x))
+        (properties (org-chronos-heading-element-properties x))
         (todo-state (org-chronos-heading-element-todo-state x))
         (link (org-chronos-heading-element-link x))
         (clock-entries (org-chronos-heading-element-clock-entries x)))
@@ -449,6 +488,9 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
       (title . ,(-last-item olp))
       (outline . ,(apply #'vector olp))
       (tags . ,(apply #'vector tags))
+      (properties . ,(-map (pcase-lambda (`(,key . ,value))
+                             (cons (intern key) value))
+                           properties))
       (link . ,(car link))
       (category . ,category)
       (todo . ,todo-state)
@@ -539,10 +581,25 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
         (org-chronos--write-group-sums-as-org-table groups group
                                                     :show-percents group-percents)
         (setq margin t))
+      (when org-chronos-show-property-summary
+        (when margin
+          (insert "\n\n"))
+        (dolist (p org-chronos-logged-properties)
+          (let* ((property (pcase p
+                             ((pred stringp) p)
+                             (`(,name . ,_) name)))
+                 (pgroups (org-chronos--group-elements-by-property property elements)))
+            (when pgroups
+              (org-chronos--write-group-sums-as-org-table pgroups
+                                                          (capitalize
+                                                           (replace-regexp-in-string
+                                                            "_" " " property))
+                                                          :show-percents group-percents)
+              (insert "\n\n"))))
+        (setq margin nil))
       (when (member "entries" sections)
         (when margin
-          (insert "\n\n")
-          (setq margin nil))
+          (insert "\n\n"))
         (org-chronos--write-elements-as-org-table
          (or groups elements)
          :grouped group
