@@ -500,14 +500,16 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                            (string sections-raw)
                            (symbol (symbol-name sections-raw)))
                          (split-string ","))))
-         (range-start (if-let (start (plist-get params :start))
-                          (org-chronos--ts-from-decoded-time
-                           (funcall org-chronos-parse-date-function
-                                    (cl-etypecase start
-                                      (symbol (symbol-name start))
-                                      (string start))))
-                        (org-chronos--find-date-in-heading)))
-         (range-end (ts-adjust span 1 range-start))
+         (range-start (org-chronos--ts-span-start
+                       span
+                       (if-let (start (plist-get params :start))
+                           (org-chronos--ts-from-decoded-time
+                            (funcall org-chronos-parse-date-function
+                                     (cl-etypecase start
+                                       (symbol (symbol-name start))
+                                       (string start))))
+                         (org-chronos--find-date-in-heading))))
+         (range-end (org-chronos--ts-span-end span range-start))
          (concrete-files (-> (cl-etypecase files
                                (fbound (funcall files))
                                (list files)
@@ -547,6 +549,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
          :range-format
          (cl-ecase span
            (day "%R")
+           (week "%F %a")
            (month "%F"))
          :todo-state t
          :show-total t))
@@ -558,6 +561,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                       org-chronos-export-root-directory))
                (filename (cl-ecase span
                            (day (ts-format "%Y%m%d.json" range-start))
+                           (week (ts-format "%Y%m%d.json" range-start))
                            (month (ts-format "%Y%m.json" range-start)))))
           (unless (file-directory-p dir)
             (make-directory dir))
