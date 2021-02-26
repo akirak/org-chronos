@@ -33,6 +33,7 @@
 (require 'org-ql)
 (require 'org-element)
 (require 'org-clock)
+(require 'eieio)
 
 (require 'org-chronos-utils)
 
@@ -138,6 +139,19 @@ Files are saved to subdirectories of this directory based on the
 time span."
   :group 'org-chronos
   :type 'directory)
+
+;;;; Log object
+
+(defclass org-chronos-log ()
+  ((span :initarg :span
+         :type (or null (member day week month)))
+   (start :initarg :start
+          :type ts)
+   (end :initarg :end
+        :type (or null ts))
+   (files :initarg :files
+          :type list)
+   (data :type list)))
 
 ;;;; Parsing
 
@@ -446,7 +460,67 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
     (delete-char -1)
     (org-table-align)))
 
+(defgeneric org-chronos--write-org (obj))
+(defgeneric org-chronos--write-org-null-p (obj))
+
+(cl-defstruct org-chronos-composite-view
+  views)
+
+(defmethod org-chronos--write-org ((obj org-chronos-composite-view))
+  (let (not-first)
+    (dolist (view (org-chronos-composite-view-views obj))
+      (unless (org-chronos--write-org-null-p view)
+        (when not-first
+          (insert "\n\n"))
+        (org-chronos--write-org view)
+        (setq not-first t)))))
+
+(defmethod org-chronos--write-org-null-p ((obj org-chronos-composite-view))
+  (-all-p #'org-chronos--write-org-null-p
+          (org-chronos-composite-view-views obj)))
+
+(cl-defstruct org-chronos-entry-view
+  items-or-groups grouped time-format todo-state show-total)
+
+(defmethod org-chronos--write-org ((obj org-chronos-entry-view))
+  (org-chronos--write-elements-as-org-table
+   (org-chronos-entry-view-items-or-groups obj)
+   :grouped (org-chronos-entry-view-grouped obj)
+   :range-format (org-chronos-entry-view-time-format obj)
+   :todo-state (org-chronos-entry-view-todo-state obj)
+   :show-total (org-chronos-entry-view-show-total obj)))
+
+(defmethod org-chronos--write-org-null-p ((obj org-chronos-entry-view))
+  nil)
+
+(cl-defstruct org-chronos-group-statistic-view
+  group-type groups show-percents)
+
+(defmethod org-chronos--write-org ((obj org-chronos-group-statistic-view))
+  (org-chronos--write-group-sums-as-org-table
+   (org-chronos-group-statistic-view-groups obj)
+   (org-chronos-group-statistic-view-group-type obj)
+   :show-percents (org-chronos-group-statistic-view-show-percents obj)))
+
+(defmethod org-chronos--write-org-null-p ((obj org-chronos-group-statistic-view))
+  (-all-p (-compose #'null #'cdr) (org-chronos-group-statistic-view-groups obj)))
+
 ;;;; Exporting
+(cl-defun org-chronos--export-log-to-json (log out-file
+                                               &key group-type groups)
+  (cl-check-type log org-chronos-log)
+  (with-temp-buffer
+    (insert (json-serialize
+             (org-chronos--build-object-for-json
+              :span (oref log span)
+              :start (oref log start)
+              :end (oref log end)
+              :elements (oref log data)
+              :group-type group-type
+              :groups groups
+              :files (oref log files))))
+    (write-region (point-min) (point-max) out-file)))
+
 (cl-defun org-chronos--build-object-for-json (&key span start end elements
                                                    group-type groups
                                                    files)
@@ -529,6 +603,23 @@ RANGE-LIST should be a list of `org-chronos-clock-range' objects."
 
 ;;;; Dynamic block
 
+(cl-defun org-chronos--log-init (&key files span start end)
+  (let ((obj (make-instance 'org-chronos-log
+                            :span span
+                            :files files
+                            :start start
+                            :end (or end (org-chronos--ts-span-end span start)))))
+    (org-chronos--log-update obj)
+    obj))
+
+(cl-defgeneric org-chronos--log-update (obj))
+
+(cl-defmethod org-chronos--log-update ((obj org-chronos-log))
+  (oset obj data (org-chronos--search-headings-with-clock
+                  (oref obj files)
+                  (oref obj start)
+                  (oref obj end))))
+
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
 
@@ -553,7 +644,6 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                        (symbol (symbol-name start))
                                        (string start))))
                          (org-chronos--find-date-in-heading))))
-         (range-end (org-chronos--ts-span-end span range-start))
          (concrete-files (-> (cl-etypecase files
                                (fbound (funcall files))
                                (list files)
@@ -561,57 +651,54 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                              (append (when org-chronos-scan-containing-file
                                        (list (buffer-file-name))))
                              (cl-delete-duplicates :test #'file-equal-p)))
-         (elements (org-chronos--search-headings-with-clock
-                    concrete-files
-                    range-start range-end))
+         (log (org-chronos--log-init :span span
+                                     :files concrete-files
+                                     :start range-start))
          (group (plist-get params :group))
          (group-percents (plist-get params :group-percents))
+         views
          (group (if (stringp group)
                     (intern group)
                   group))
          (groups (when group
                    (cl-ecase group
-                     (tag (org-chronos--group-elements-by-tag elements))
-                     (category (org-chronos--group-elements-by-category elements)))))
-         margin)
+                     (tag (org-chronos--group-elements-by-tag (oref log data)))
+                     (category (org-chronos--group-elements-by-category (oref log data)))))))
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
             "\n")
-    (if (null elements)
+    (if (null (oref log data))
         (insert "There is no activity during this period yet.")
       (when (and group (member "groups" sections))
-        (org-chronos--write-group-sums-as-org-table groups group
-                                                    :show-percents group-percents)
-        (setq margin t))
+        (push (make-org-chronos-group-statistic-view :group-type group
+                                                     :groups groups
+                                                     :show-percents group-percents)
+              views))
       (when org-chronos-show-property-summary
-        (when margin
-          (insert "\n\n"))
         (dolist (p org-chronos-logged-properties)
-          (let* ((property (pcase p
-                             ((pred stringp) p)
-                             (`(,name . ,_) name)))
-                 (pgroups (org-chronos--group-elements-by-property property elements)))
-            (when pgroups
-              (org-chronos--write-group-sums-as-org-table pgroups
-                                                          (capitalize
-                                                           (replace-regexp-in-string
-                                                            "_" " " property))
-                                                          :show-percents group-percents)
-              (insert "\n\n"))))
-        (setq margin nil))
+          (let ((property (pcase p
+                            ((pred stringp) p)
+                            (`(,name . ,_) name))))
+            (push (make-org-chronos-group-statistic-view
+                   :groups (org-chronos--group-elements-by-property property
+                                                                    (oref log data))
+                   :group-type (capitalize
+                                (replace-regexp-in-string
+                                 "_" " " property))
+                   :show-percents group-percents)
+                  views))))
       (when (member "entries" sections)
-        (when margin
-          (insert "\n\n"))
-        (org-chronos--write-elements-as-org-table
-         (or groups elements)
-         :grouped group
-         :range-format
-         (cl-ecase span
-           (day "%R")
-           (week "%F %a")
-           (month "%F"))
-         :todo-state t
-         :show-total t))
+        (push (make-org-chronos-entry-view
+               :items-or-groups (or groups (oref log data))
+               :grouped group
+               :time-format (cl-ecase span
+                              (day "%R")
+                              (week "%F %a")
+                              (month "%F"))
+               :todo-state t
+               :show-total t)
+              views))
+      (org-chronos--write-org (make-org-chronos-composite-view :views (nreverse views)))
       (when org-chronos-auto-export
         (unless (and (stringp org-chronos-export-root-directory)
                      (file-directory-p org-chronos-export-root-directory))
@@ -624,18 +711,11 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                            (month (ts-format "%Y%m.json" range-start)))))
           (unless (file-directory-p dir)
             (make-directory dir))
-          (with-temp-buffer
-            (insert (json-serialize
-                     (org-chronos--build-object-for-json
-                      :span span
-                      :start range-start
-                      :end range-end
-                      :elements elements
-                      :group-type group
-                      :groups groups
-                      :files concrete-files)))
-            (write-region (point-min) (point-max)
-                          (expand-file-name filename dir))))))))
+          (org-chronos--export-log-to-json log
+                                           (expand-file-name filename dir)
+                                           :group-type group
+                                           :groups groups))))))
 
+(provide 'org-chronos-log)
 (provide 'org-chronos-log)
 ;;; org-chronos-log.el ends here
