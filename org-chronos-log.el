@@ -52,7 +52,7 @@
 
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
-  marker olp tags category properties todo-state link clock-entries)
+  marker olp tags category properties todo-state link log-notes clock-entries)
 
 ;;;; Custom variables
 
@@ -202,6 +202,7 @@ time span."
                            (re-search-forward org-logbook-drawer-re
                                               content-end t))))
        (when logbook-end
+         (goto-char (car (match-data)))
          (save-restriction
            (narrow-to-region (point) logbook-end)
            ,@progn)))))
@@ -215,6 +216,115 @@ time span."
          (push range entries)))
      entries)))
 
+(defun org-chronos--parse-logbook ()
+  "Return clock entries on the current Org heading after the point."
+  (org-chronos--with-logbook
+   (let (clock-entries
+         log-notes)
+     (catch 'finish
+       (while (< (point) (point-max))
+         (cond
+          ((looking-at org-clock-line-re)
+           (when-let (range (org-chronos--parse-clock-line))
+             (push range clock-entries))
+           (forward-line))
+          ((looking-at (rx (* space) "- "))
+           (push (org-chronos--parse-log-note-heading)
+                 log-notes))
+          ((looking-at org-clock-drawer-end-re)
+           (throw 'finish t))
+          (t
+           (message (thing-at-point 'line))
+           (beginning-of-line 2)))))
+     (list :clock-entries clock-entries
+           :log-notes log-notes))))
+
+(defun org-chronos--log-note-heading-to-re (pattern)
+  (--> pattern
+    (replace-regexp-in-string
+     (rx "%" (?  "-") (* (any digit)) (any "td"))
+     (replace-regexp-in-string
+      "\\\\" "\\\\\\\\"
+      (org-re-timestamp 'inactive))
+     it t)
+    (replace-regexp-in-string
+     (rx "%" (?  "-") (* (any digit)) (any "TD"))
+     (replace-regexp-in-string
+      "\\\\" "\\\\\\\\"
+      (org-re-timestamp 'active))
+     it t)
+    (replace-regexp-in-string
+     (rx "%" (?  "-") (* (any digit)) (any "sS"))
+     (replace-regexp-in-string
+      "\\\\" "\\\\\\\\"
+      (rx (* space)
+          (group (?  "\"" (+ (any upper)) "\""))
+          (* space)))
+     it t)
+    (concat (rx (* space) "- ") it)))
+
+(defstruct org-chronos-log-note
+  type timestamp attributes comment)
+
+(defun org-chronos--parse-log-note-heading ()
+  (catch 'finish
+    (pcase-dolist (`(,type . ,pattern) org-log-note-headings)
+      (unless (string-empty-p pattern)
+        (let ((re (org-chronos--log-note-heading-to-re pattern)))
+          (when (looking-at re)
+            (goto-char (nth 1 (match-data)))
+            (let* ((placeholders (s-match-strings-all
+                                  (rx "%" (?  "-") (* (any digit))
+                                      ;; TODO: Add %u and %U
+                                      (group (any "sStTdD")))
+                                  pattern))
+                   (match-strings (-map (pcase-lambda (`(,begin ,end))
+                                          (when (and begin end)
+                                            (buffer-substring-no-properties begin end)))
+                                        (-partition-all 2 (match-data))))
+                   (note-data (org-chronos--parse-log-note-data
+                               placeholders
+                               (cdr match-strings)))
+                   (timestamp-ts (org-chronos--ts-from-decoded-time
+                                  (org-parse-time-string
+                                   (alist-get 'timestamp note-data))))
+                   (comment-start (when (looking-at (rx (* space) "\\\\"))
+                                    (re-search-forward (rx (* space) "\\\\\n" (* space)))))
+                   (comment (if comment-start
+                                (progn
+                                  (re-search-forward (rx (or (regexp org-clock-line-re)
+                                                             (and bol (* space) "- ")
+                                                             (regexp org-clock-drawer-end-re)))
+                                                     nil t)
+                                  (beginning-of-line 1)
+                                  (buffer-substring-no-properties comment-start (1- (point))))
+                              (beginning-of-line 2)
+                              nil)))
+              (throw 'finish
+                     (make-org-chronos-log-note
+                      :type type
+                      :timestamp timestamp-ts
+                      :attributes note-data
+                      :comment comment)))))))))
+
+(defun org-chronos--parse-log-note-data (placeholders match-strings)
+  (->> (-zip (--map (nth 1 it) placeholders) match-strings)
+       (-map (pcase-lambda (`(,c . ,s))
+               (cl-labels
+                   ((parse-todo
+                     (raw)
+                     (when (string-match
+                            (rx bol "\"" (group (+ anything)) "\"" eol)
+                            raw)
+                       (match-string 1 raw))))
+                 (pcase c
+                   ("t" (cons 'timestamp s))
+                   ("T" (cons 'timestamp s))
+                   ("d" (cons 'timestamp s))
+                   ("D" (cons 'timestamp s))
+                   ("s" (cons 'old-todo (parse-todo s)))
+                   ("S" (cons 'new-todo (parse-todo s)))))))))
+
 (defun org-chronos--search-headings-with-clock (files from to)
   "Search headings with clock entries in a given time range.
 
@@ -224,21 +334,27 @@ FIXME: FILES, FROM, and TO."
          :action
          `(org-save-outline-visibility t
             (org-show-entry)
-            (make-org-chronos-heading-element
-             :marker (point-marker)
-             :link (when org-chronos-annotate-links
-                     (save-excursion
-                       (org-store-link nil 'interactive)
-                       (pop org-stored-links)))
-             :olp (org-get-outline-path t t)
-             :tags (org-get-tags)
-             :category (org-get-category)
-             :properties (org-chronos--collect-properties)
-             :todo-state (org-get-todo-state)
-             :clock-entries
-             (-filter (lambda (x)
-                        (ts-in ,from ,to (org-chronos-clock-range-start x)))
-                      (org-chronos--clock-entries-on-heading)))))
+            (let* ((logbook (org-chronos--parse-logbook))
+                   (clock-entries (-filter (lambda (x)
+                                             (ts-in ,from ,to (org-chronos-clock-range-start x)))
+                                           (plist-get logbook :clock-entries)))
+                   (log-notes (-filter (lambda (x)
+                                         (ts-in ,from ,to (org-chronos-log-note-timestamp x)))
+                                       (plist-get logbook :log-notes))))
+              (when (or clock-entries log-notes)
+                (make-org-chronos-heading-element
+                 :marker (point-marker)
+                 :link (when org-chronos-annotate-links
+                         (save-excursion
+                           (org-store-link nil 'interactive)
+                           (pop org-stored-links)))
+                 :olp (org-get-outline-path t t)
+                 :tags (org-get-tags)
+                 :category (org-get-category)
+                 :properties (org-chronos--collect-properties)
+                 :todo-state (org-get-todo-state)
+                 :log-notes log-notes
+                 :clock-entries clock-entries)))))
        (-filter #'org-chronos--meaningful-element-p)))
 
 (defun org-chronos--collect-properties ()
@@ -259,7 +375,7 @@ FIXME: FILES, FROM, and TO."
   ;; Since clocks may not be contained in the heading but in
   ;; children, you have to exclude headings without clock entries
   ;; during the period.
-  (and (org-chronos-heading-element-clock-entries element)
+  (and (org-chronos-heading-element-p element)
        (not (member (org-chronos-heading-element-category element)
                     org-chronos-ignored-categories))))
 
@@ -488,16 +604,25 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
 (cl-defstruct org-chronos-entry-view
   items-or-groups grouped time-format todo-state show-total)
 
+(defun org-chronos-entry-view-clocked-items-or-groups (x)
+  (if (org-chronos-entry-view-grouped x)
+      (->> (org-chronos-entry-view-items-or-groups x)
+           (-map (pcase-lambda (`(,group . ,items))
+                   (cons group
+                         (-filter #'org-chronos-heading-element-clock-entries items)))))
+    (->> (org-chronos-entry-view-items-or-groups x)
+         (-filter #'org-chronos-heading-element-clock-entries))))
+
 (defmethod org-chronos--write-org ((obj org-chronos-entry-view))
   (org-chronos--write-elements-as-org-table
-   (org-chronos-entry-view-items-or-groups obj)
+   (org-chronos-entry-view-clocked-items-or-groups obj)
    :grouped (org-chronos-entry-view-grouped obj)
    :range-format (org-chronos-entry-view-time-format obj)
    :todo-state (org-chronos-entry-view-todo-state obj)
    :show-total (org-chronos-entry-view-show-total obj)))
 
 (defmethod org-chronos--write-org-null-p ((obj org-chronos-entry-view))
-  nil)
+  (null (org-chronos-entry-view-clocked-items-or-groups obj)))
 
 (cl-defstruct org-chronos-group-statistic-view
   group-type groups show-percents)
@@ -564,6 +689,7 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
         (properties (org-chronos-heading-element-properties x))
         (todo-state (org-chronos-heading-element-todo-state x))
         (link (org-chronos-heading-element-link x))
+        (log-notes (org-chronos-heading-element-log-notes x))
         (clock-entries (org-chronos-heading-element-clock-entries x)))
     `((buffer . ,(buffer-name (marker-buffer marker)))
       (position . ,(marker-position marker))
@@ -576,9 +702,19 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
       (link . ,(car link))
       (category . ,category)
       (todo . ,todo-state)
+      (log-notes . ,(apply #'vector
+                           (-map #'org-chronos--json-serializable-object
+                                 log-notes)))
       (clocks . ,(apply #'vector
                         (-map #'org-chronos--json-serializable-object
                               clock-entries))))))
+
+(cl-defmethod org-chronos--json-serializable-object ((x org-chronos-log-note))
+  "Convert X to an object that can be serialized to JSON."
+  `((time . ,(ts-format (org-chronos-log-note-timestamp x)))
+    (type . ,(symbol-name (org-chronos-log-note-type x)))
+    (attributes . ,(org-chronos-log-note-attributes x))
+    (comment . ,(org-chronos-log-note-comment x))))
 
 (cl-defmethod org-chronos--json-serializable-object ((x org-chronos-clock-range))
   "Convert X to an object that can be serialized to JSON."
