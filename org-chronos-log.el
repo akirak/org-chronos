@@ -192,22 +192,28 @@ time span."
          :duration-string duration-string
          :duration-minutes (org-duration-to-minutes duration-string))))))
 
+(defmacro org-chronos--with-logbook (&rest progn)
+  "Evaluate PROGN with the buffer narrowed to the logbook, if any."
+  `(save-excursion
+     (org-back-to-heading)
+     (end-of-line 1)
+     (let* ((content-end (org-entry-end-position))
+            (logbook-end (save-excursion
+                           (re-search-forward org-logbook-drawer-re
+                                              content-end t))))
+       (when logbook-end
+         (save-restriction
+           (narrow-to-region (point) logbook-end)
+           ,@progn)))))
+
 (defun org-chronos--clock-entries-on-heading ()
   "Return clock entries on the current Org heading after the point."
-  (save-excursion
-    (org-back-to-heading)
-    (end-of-line 1)
-    (let* ((content-end (org-entry-end-position))
-           (logbook-end (save-excursion
-                          (re-search-forward org-logbook-drawer-re
-                                             content-end t)))
-           entries)
-      (when logbook-end
-        (while (re-search-forward org-clock-line-re
-                                  logbook-end t)
-          (when-let (range (org-chronos--parse-clock-line))
-            (push range entries))))
-      entries)))
+  (org-chronos--with-logbook
+   (let (entries)
+     (while (re-search-forward org-clock-line-re nil t)
+       (when-let (range (org-chronos--parse-clock-line))
+         (push range entries)))
+     entries)))
 
 (defun org-chronos--search-headings-with-clock (files from to)
   "Search headings with clock entries in a given time range.
