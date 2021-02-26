@@ -656,7 +656,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
                                                    group-type groups
                                                    files)
   "FIXME: SPAN START END ELEMENTS GROUP-TYPE GROUPS FILES."
-  `((source . ((files . ,(apply #'vector files))))
+  `((version . "0.1")
+    (source . ((files . ,(apply #'vector files))))
     (range . ((span . ,(symbol-name span))
               (start . ,(ts-format start))
               (end . ,(ts-format end))))
