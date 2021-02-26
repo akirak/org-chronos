@@ -330,7 +330,7 @@ time span."
 
 FIXME: FILES, FROM, and TO."
   (->> (org-ql-select files
-         `(clocked :from ,from :to ,to)
+         `(ts-inactive :from ,from :to ,to)
          :action
          `(org-save-outline-visibility t
             (org-show-entry)
