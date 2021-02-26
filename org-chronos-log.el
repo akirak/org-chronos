@@ -669,36 +669,39 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
             "\n")
     (if (null (oref log data))
         (insert "There is no activity during this period yet.")
-      (when (and group (member "groups" sections))
-        (push (make-org-chronos-group-statistic-view :group-type group
-                                                     :groups groups
-                                                     :show-percents group-percents)
-              views))
-      (when (and org-chronos-show-property-summary
-                 (member "property-groups" sections))
-        (dolist (p org-chronos-logged-properties)
-          (let ((property (pcase p
-                            ((pred stringp) p)
-                            (`(,name . ,_) name))))
-            (push (make-org-chronos-group-statistic-view
-                   :groups (org-chronos--group-elements-by-property property
-                                                                    (oref log data))
-                   :group-type (capitalize
-                                (replace-regexp-in-string
-                                 "_" " " property))
-                   :show-percents group-percents)
-                  views))))
-      (when (member "entries" sections)
-        (push (make-org-chronos-entry-view
-               :items-or-groups (or groups (oref log data))
-               :grouped group
-               :time-format (cl-ecase span
-                              (day "%R")
-                              (week "%F %a")
-                              (month "%F"))
-               :todo-state t
-               :show-total t)
-              views))
+      (dolist (section sections)
+        (pcase section
+          ("groups"
+           (when group
+             (push (make-org-chronos-group-statistic-view :group-type group
+                                                          :groups groups
+                                                          :show-percents group-percents)
+                   views)))
+          ("property-groups"
+           (when org-chronos-show-property-summary
+             (dolist (p org-chronos-logged-properties)
+               (let ((property (pcase p
+                                 ((pred stringp) p)
+                                 (`(,name . ,_) name))))
+                 (push (make-org-chronos-group-statistic-view
+                        :groups (org-chronos--group-elements-by-property property
+                                                                         (oref log data))
+                        :group-type (capitalize
+                                     (replace-regexp-in-string
+                                      "_" " " property))
+                        :show-percents group-percents)
+                       views)))))
+          ("entries"
+           (push (make-org-chronos-entry-view
+                  :items-or-groups (or groups (oref log data))
+                  :grouped group
+                  :time-format (cl-ecase span
+                                 (day "%R")
+                                 (week "%F %a")
+                                 (month "%F"))
+                  :todo-state t
+                  :show-total t)
+                 views))))
       (org-chronos--write-org (make-org-chronos-composite-view :views (nreverse views)))
       (when org-chronos-auto-export
         (unless (and (stringp org-chronos-export-root-directory)
