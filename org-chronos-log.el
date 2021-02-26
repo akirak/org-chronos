@@ -701,7 +701,9 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                  (month "%F"))
                   :todo-state t
                   :show-total t)
-                 views))))
+                 views))
+          (_
+           (error "Unsupported section type: %s" section))))
       (org-chronos--write-org (make-org-chronos-composite-view :views (nreverse views)))
       (when org-chronos-auto-export
         (unless (and (stringp org-chronos-export-root-directory)
