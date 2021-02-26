@@ -69,7 +69,7 @@
 
 (defcustom org-chronos-log-dblock-defaults
   (list :span 'day :files #'org-agenda-files
-        :sections "groups,entries")
+        :sections "groups,property-groups,entries")
   "Default parameters of the Org dynamic block."
   :group 'org-chronos
   :type 'plist)
@@ -674,7 +674,8 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                                      :groups groups
                                                      :show-percents group-percents)
               views))
-      (when org-chronos-show-property-summary
+      (when (and org-chronos-show-property-summary
+                 (member "property-groups" sections))
         (dolist (p org-chronos-logged-properties)
           (let ((property (pcase p
                             ((pred stringp) p)
