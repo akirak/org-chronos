@@ -237,7 +237,6 @@ time span."
           ((looking-at org-clock-drawer-end-re)
            (throw 'finish t))
           (t
-           (message (thing-at-point 'line))
            (beginning-of-line 2)))))
      (list :clock-entries clock-entries
            :log-notes log-notes))))
