@@ -689,19 +689,21 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
     (range . ((span . ,(symbol-name span))
               (start . ,(ts-format start))
               (end . ,(ts-format end))))
-    (meta . ((groups . ,(when groups
-                          `((,group-type
-                             . ,(apply #'vector
-                                       (-map (pcase-lambda (`(,group . ,_elements))
-                                               group)
-                                             groups))))))
-             (properties . ,(when org-chronos-logged-properties
-                              (apply #'vector
-                                     (-map (lambda (p)
-                                             (pcase p
-                                               ((pred stringp) p)
-                                               (`(,name . ,_) name)))
-                                           org-chronos-logged-properties))))))
+    (meta . ((groups . ,(if groups
+                            `((,group-type
+                               . ,(apply #'vector
+                                         (-map (pcase-lambda (`(,group . ,_elements))
+                                                 group)
+                                               groups))))
+                          :null))
+             (properties . ,(if org-chronos-logged-properties
+                                (apply #'vector
+                                       (-map (lambda (p)
+                                               (pcase p
+                                                 ((pred stringp) p)
+                                                 (`(,name . ,_) name)))
+                                             org-chronos-logged-properties))
+                              :null))))
     (data . ((headings . ,(apply #'vector
                                  (-map #'org-chronos--json-serializable-object
                                        elements)))))))
@@ -729,8 +731,8 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
                              (cons (intern key) value))
                            properties))
       (link . ,(car link))
-      (category . ,category)
-      (todo . ,todo-state)
+      (category . ,(or category :null))
+      (todo . ,(or todo-state :null))
       (log-notes . ,(apply #'vector
                            (-map #'org-chronos--json-serializable-object
                                  log-notes)))
@@ -743,7 +745,7 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
   `((time . ,(ts-format (org-chronos-log-note-timestamp x)))
     (type . ,(symbol-name (org-chronos-log-note-type x)))
     (attributes . ,(org-chronos-log-note-attributes x))
-    (comment . ,(org-chronos-log-note-comment x))))
+    (comment . ,(or (org-chronos-log-note-comment x) :null))))
 
 (cl-defmethod org-chronos--json-serializable-object ((x org-chronos-clock-range))
   "Convert X to an object that can be serialized to JSON."
