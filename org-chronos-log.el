@@ -50,6 +50,9 @@
   ;; Duration in minutes as a number
   duration-minutes)
 
+(cl-defstruct org-chronos-log-note
+  type timestamp attributes comment)
+
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
   marker olp tags category properties todo-state link log-notes clock-entries)
@@ -240,6 +243,10 @@ time span."
            :log-notes log-notes))))
 
 (defun org-chronos--log-note-heading-to-re (pattern)
+  "Convert a log note pattern to a regular expression.
+
+PATTERN should be the cdr of one of the items in
+`org-log-note-headings'."
   (--> pattern
     (replace-regexp-in-string
      (rx "%" (?  "-") (* (any digit)) (any "td"))
@@ -263,10 +270,11 @@ time span."
      it t)
     (concat (rx (* space) "- ") it)))
 
-(defstruct org-chronos-log-note
-  type timestamp attributes comment)
-
 (defun org-chronos--parse-log-note-heading ()
+  "Parse a log note heading in the buffer.
+
+This function parses a log note at point and returns an object of
+`org-chronos-log-note' type."
   (catch 'finish
     (pcase-dolist (`(,type . ,pattern) org-log-note-headings)
       (unless (string-empty-p pattern)
@@ -282,7 +290,7 @@ time span."
                                           (when (and begin end)
                                             (buffer-substring-no-properties begin end)))
                                         (-partition-all 2 (match-data))))
-                   (note-data (org-chronos--parse-log-note-data
+                   (note-data (org-chronos--analyse-log-note-data
                                placeholders
                                (cdr match-strings)))
                    (timestamp-ts (org-chronos--ts-from-decoded-time
@@ -307,7 +315,11 @@ time span."
                       :attributes note-data
                       :comment comment)))))))))
 
-(defun org-chronos--parse-log-note-data (placeholders match-strings)
+(defun org-chronos--analyse-log-note-data (placeholders match-strings)
+  "Given the parsing result, returns an alist of data.
+
+Both PLACEHOLDERS and MATCH-STRINGS must be a list that have an
+equal number of items."
   (->> (-zip (--map (nth 1 it) placeholders) match-strings)
        (-map (pcase-lambda (`(,c . ,s))
                (cl-labels
@@ -582,13 +594,16 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
     (delete-char -1)
     (org-table-align)))
 
-(defgeneric org-chronos--write-org (obj))
-(defgeneric org-chronos--write-org-null-p (obj))
+(cl-defgeneric org-chronos--write-org (obj)
+  "Write OBJ as Org into the buffer.")
+(cl-defgeneric org-chronos--write-org-null-p (obj)
+  "Return non-nil if OBJ has no entries.")
 
 (cl-defstruct org-chronos-composite-view
   views)
 
-(defmethod org-chronos--write-org ((obj org-chronos-composite-view))
+(cl-defmethod org-chronos--write-org ((obj org-chronos-composite-view))
+  "Write OBJ as Org into the buffer."
   (let (not-first)
     (dolist (view (org-chronos-composite-view-views obj))
       (unless (org-chronos--write-org-null-p view)
@@ -597,7 +612,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
         (org-chronos--write-org view)
         (setq not-first t)))))
 
-(defmethod org-chronos--write-org-null-p ((obj org-chronos-composite-view))
+(cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-composite-view))
+  "Return non-nil if OBJ has no entries."
   (-all-p #'org-chronos--write-org-null-p
           (org-chronos-composite-view-views obj)))
 
@@ -605,6 +621,7 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   items-or-groups grouped time-format todo-state show-total)
 
 (defun org-chronos-entry-view-clocked-items-or-groups (x)
+  "Returns items that have clock entries in X."
   (if (org-chronos-entry-view-grouped x)
       (->> (org-chronos-entry-view-items-or-groups x)
            (-map (pcase-lambda (`(,group . ,items))
@@ -613,7 +630,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
     (->> (org-chronos-entry-view-items-or-groups x)
          (-filter #'org-chronos-heading-element-clock-entries))))
 
-(defmethod org-chronos--write-org ((obj org-chronos-entry-view))
+(cl-defmethod org-chronos--write-org ((obj org-chronos-entry-view))
+  "Write OBJ as Org into the buffer."
   (org-chronos--write-elements-as-org-table
    (org-chronos-entry-view-clocked-items-or-groups obj)
    :grouped (org-chronos-entry-view-grouped obj)
@@ -621,24 +639,34 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
    :todo-state (org-chronos-entry-view-todo-state obj)
    :show-total (org-chronos-entry-view-show-total obj)))
 
-(defmethod org-chronos--write-org-null-p ((obj org-chronos-entry-view))
+(cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-entry-view))
+  "Return non-nil if OBJ has no entries."
   (null (org-chronos-entry-view-clocked-items-or-groups obj)))
 
 (cl-defstruct org-chronos-group-statistic-view
   group-type groups show-percents)
 
-(defmethod org-chronos--write-org ((obj org-chronos-group-statistic-view))
+(cl-defmethod org-chronos--write-org ((obj org-chronos-group-statistic-view))
+  "Write OBJ as Org into the buffer."
   (org-chronos--write-group-sums-as-org-table
    (org-chronos-group-statistic-view-groups obj)
    (org-chronos-group-statistic-view-group-type obj)
    :show-percents (org-chronos-group-statistic-view-show-percents obj)))
 
-(defmethod org-chronos--write-org-null-p ((obj org-chronos-group-statistic-view))
+(cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-group-statistic-view))
+  "Return non-nil if OBJ has no entries."
   (-all-p (-compose #'null #'cdr) (org-chronos-group-statistic-view-groups obj)))
 
 ;;;; Exporting
 (cl-defun org-chronos--export-log-to-json (log out-file
-                                               &key group-type groups)
+                                               &key groups group-type)
+  "Export log data to a JSON file.
+
+LOG must be an object of `org-chronos-log' type.
+
+It write the data of the log object to OUT-FILE in JSON.
+
+Optionally, it can take a list of GROUPS and its GROUP-TYPE."
   (cl-check-type log org-chronos-log)
   (with-temp-buffer
     (insert (json-serialize
@@ -747,6 +775,16 @@ RANGE-LIST should be a list of `org-chronos-clock-range' objects."
 ;;;; Dynamic block
 
 (cl-defun org-chronos--log-init (&key files span start end)
+  "Create an object of `org-chronos-log' for a given span from files.
+
+This function creates an object and analyse items for a given period.
+
+FILES is a list of source Org files.
+
+SPAN is a symbol that denotes the type of period.
+
+START and END are ts objects for specifying the range of the
+period. The latter is optional."
   (let ((obj (make-instance 'org-chronos-log
                             :span span
                             :files files
@@ -755,9 +793,11 @@ RANGE-LIST should be a list of `org-chronos-clock-range' objects."
     (org-chronos--log-update obj)
     obj))
 
-(cl-defgeneric org-chronos--log-update (obj))
+(cl-defgeneric org-chronos--log-update (obj)
+  "Update the data in OBJ without changing its domain.")
 
 (cl-defmethod org-chronos--log-update ((obj org-chronos-log))
+  "Update the data in OBJ on the same period."
   (oset obj data (org-chronos--search-headings-with-clock
                   (oref obj files)
                   (oref obj start)
