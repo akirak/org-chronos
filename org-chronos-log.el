@@ -225,7 +225,7 @@ time span."
    (let (clock-entries
          log-notes)
      (catch 'finish
-       (while (eobp)
+       (while (not (eobp))
          (cond
           ((looking-at org-clock-line-re)
            (when-let (range (org-chronos--parse-clock-line))
