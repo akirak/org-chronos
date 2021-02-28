@@ -907,5 +907,4 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                            :groups groups))))))
 
 (provide 'org-chronos-log)
-(provide 'org-chronos-log)
 ;;; org-chronos-log.el ends here
