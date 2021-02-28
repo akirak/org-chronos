@@ -37,6 +37,10 @@
 
 (require 'org-chronos-utils)
 
+;;;; Constants
+
+(defconst org-chronos-json-version "0.1.1")
+
 ;;;; Structs
 
 (cl-defstruct org-chronos-clock-range
@@ -148,6 +152,8 @@ time span."
 (defclass org-chronos-log ()
   ((span :initarg :span
          :type (or null (member day week month)))
+   (snapshot-time :initarg :snapshot-time
+                  :type ts)
    (start :initarg :start
           :type ts)
    (end :initarg :end
@@ -674,14 +680,17 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
               :elements (oref log data)
               :group-type group-type
               :groups groups
+              :closed (org-chronos--log-closed-p log)
               :files (oref log files))))
     (write-region (point-min) (point-max) out-file)))
 
 (cl-defun org-chronos--build-object-for-json (&key span start end elements
                                                    group-type groups
+                                                   closed
                                                    files)
   "FIXME: SPAN START END ELEMENTS GROUP-TYPE GROUPS FILES."
-  `((version . "0.1")
+  `((version . ,org-chronos-json-version)
+    (closed . ,(if closed t :false))
     (source . ((files . ,(apply #'vector files))))
     (range . ((span . ,(symbol-name span))
               (start . ,(ts-format start))
@@ -785,6 +794,7 @@ SPAN is a symbol that denotes the type of period.
 START and END are ts objects for specifying the range of the
 period. The latter is optional."
   (let ((obj (make-instance 'org-chronos-log
+                            :snapshot-time (ts-now)
                             :span span
                             :files files
                             :start start
@@ -801,6 +811,11 @@ period. The latter is optional."
                   (oref obj files)
                   (oref obj start)
                   (oref obj end))))
+
+(defun org-chronos--log-closed-p (obj)
+  "Return non-nil if a log object is after the end of the time range."
+  (cl-check-type obj org-chronos-log)
+  (ts> (oref obj snapshot-time) (oref obj end)))
 
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
@@ -853,6 +868,11 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (category (org-chronos--group-elements-by-category elements))))))
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
+            " taken at "
+            (ts-format "%F %R" (oref log snapshot-time))
+            (if (org-chronos--log-closed-p log)
+                " (closed)"
+              " (not closed)")
             "\n")
     (if (null (oref log data))
         (insert "There is no activity during this period yet.")
