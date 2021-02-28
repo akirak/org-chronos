@@ -467,39 +467,37 @@ output options."
     (cl-labels
         ((write-element-row
           (x &optional group)
-          (unless (and org-chronos-clock-threshold
-                       (< (org-chronos--sum-minutes x) org-chronos-clock-threshold))
-            (insert "| "
-                    (mapconcat (lambda (column)
-                                 (pcase (car column)
-                                   ('group
-                                    group)
-                                   ('name
-                                    (if-let (link (org-chronos-heading-element-link x))
-                                        (org-link-make-string (car link)
-                                                              (org-chronos--trim-string-at-length
-                                                               (nth 1 link)
-                                                               org-chronos-trim-headline))
-                                      (org-chronos--trim-string-at-length
-                                       (-last-item (org-chronos-heading-element-olp x))
-                                       org-chronos-trim-headline)))
-                                   ('duration
-                                    (org-duration-from-minutes (org-chronos--sum-minutes x)
-                                                               org-chronos-duration-format))
-                                   ('start
-                                    (ts-format range-format
-                                               (org-chronos--start-of-clocks
-                                                (org-chronos-heading-element-clock-entries x))))
-                                   ('end
-                                    (ts-format range-format
-                                               (org-chronos--end-of-clocks
-                                                (org-chronos-heading-element-clock-entries x))))
-                                   ('todo
-                                    (or (org-chronos-heading-element-todo-state x)
-                                        ""))))
-                               columns
-                               " | ")
-                    " |\n"))
+          (insert "| "
+                  (mapconcat (lambda (column)
+                               (pcase (car column)
+                                 ('group
+                                  group)
+                                 ('name
+                                  (if-let (link (org-chronos-heading-element-link x))
+                                      (org-link-make-string (car link)
+                                                            (org-chronos--trim-string-at-length
+                                                             (nth 1 link)
+                                                             org-chronos-trim-headline))
+                                    (org-chronos--trim-string-at-length
+                                     (-last-item (org-chronos-heading-element-olp x))
+                                     org-chronos-trim-headline)))
+                                 ('duration
+                                  (org-duration-from-minutes (org-chronos--sum-minutes x)
+                                                             org-chronos-duration-format))
+                                 ('start
+                                  (ts-format range-format
+                                             (org-chronos--start-of-clocks
+                                              (org-chronos-heading-element-clock-entries x))))
+                                 ('end
+                                  (ts-format range-format
+                                             (org-chronos--end-of-clocks
+                                              (org-chronos-heading-element-clock-entries x))))
+                                 ('todo
+                                  (or (org-chronos-heading-element-todo-state x)
+                                      ""))))
+                             columns
+                             " | ")
+                  " |\n")
           (cl-incf total (org-chronos--sum-minutes x))))
       (if grouped
           (pcase-dolist (`(,group . ,group-elements) elements)
@@ -844,10 +842,15 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
          (group (if (stringp group)
                     (intern group)
                   group))
+         (elements (if org-chronos-clock-threshold
+                       (-filter (lambda (x)
+                                  (>= (org-chronos--sum-minutes x) org-chronos-clock-threshold))
+                                (oref log data))
+                     (oref log data)))
          (groups (when group
                    (cl-ecase group
-                     (tag (org-chronos--group-elements-by-tag (oref log data)))
-                     (category (org-chronos--group-elements-by-category (oref log data)))))))
+                     (tag (org-chronos--group-elements-by-tag elements))
+                     (category (org-chronos--group-elements-by-category elements))))))
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
             "\n")
@@ -868,8 +871,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                  ((pred stringp) p)
                                  (`(,name . ,_) name))))
                  (push (make-org-chronos-group-statistic-view
-                        :groups (org-chronos--group-elements-by-property property
-                                                                         (oref log data))
+                        :groups (org-chronos--group-elements-by-property property elements)
                         :group-type (capitalize
                                      (replace-regexp-in-string
                                       "_" " " property))
@@ -877,7 +879,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                        views)))))
           ("entries"
            (push (make-org-chronos-entry-view
-                  :items-or-groups (or groups (oref log data))
+                  :items-or-groups (or groups elements)
                   :grouped group
                   :time-format (cl-ecase span
                                  (day "%R")
