@@ -928,5 +928,68 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                            :group-type group
                                            :groups groups))))))
 
+;;;; Timeline buffer
+;; This is an experimental feature.
+(defvar org-chronos-last-activity-time nil)
+
+;;;###autoload
+(defun org-chronos-timeline (start end)
+  "Display a timeline from START to END in a separate buffer."
+  (interactive (list (make-ts
+                      :unix (float-time (org-read-date t t nil "Start time: ")))
+                     (ts-now)))
+  (let ((entries (->> (org-chronos--search-headings-with-clock
+                       (org-agenda-files) start end)
+                      (-map (lambda (element)
+                              (-map (lambda (clock-entry)
+                                      (cons clock-entry
+                                            (-last-item (org-chronos-heading-element-olp element))))
+                                    (org-chronos-heading-element-clock-entries element))))
+                      (-flatten-n 1)
+                      (-sort (-on #'ts< (-compose #'org-chronos-clock-range-start #'car)))))
+        prev)
+    (with-current-buffer (get-buffer-create "*timeline*")
+      (erase-buffer)
+      (pcase-dolist (`(,clock . ,title) entries)
+        (let* ((start (org-chronos-clock-range-start clock))
+               (end (org-chronos-clock-range-end clock))
+               (gap (when prev
+                      (ts-difference start prev))))
+          (insert (if gap
+                      (format "           (%s break)\n"
+                              (ts-human-format-duration gap))
+                    "")
+                  (ts-format "%F %R" start)
+                  "-"
+                  (ts-format "%R" end)
+                  " "
+                  title
+                  "\n")
+          (setq prev end)))
+      (setq org-chronos-last-activity-time prev)
+      (insert (format "           (%s since the last activity)\n"
+                      (ts-human-format-duration (ts-difference (ts-now) prev))))
+      (display-buffer (current-buffer)))))
+
+;;;###autoload
+(defun org-chronos-add-clock (start end)
+  "Add a clock entry from START to END the current Org subtree."
+  (interactive (if (and (derived-mode-p 'org-mode)
+                        (not (org-before-first-heading-p)))
+                   (list (org-read-date t t nil "From"
+                                        (-some->> org-chronos-last-activity-time
+                                          (ts-unix)))
+                         (org-read-date t t nil "To"))
+                 (user-error "Run this command inside an Org entry")))
+  (save-excursion
+    (org-clock-find-position nil)
+    (insert org-clock-string " "
+            (format-time-string (org-time-stamp-format t t) start)
+            "--"
+            (format-time-string (org-time-stamp-format t t) end)
+            "\n")
+    (org-end-of-line 0)
+    (org-clock-update-time-maybe)))
+
 (provide 'org-chronos-log)
 ;;; org-chronos-log.el ends here
