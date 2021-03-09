@@ -955,7 +955,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                (end (org-chronos-clock-range-end clock))
                (gap (when prev
                       (ts-difference start prev))))
-          (insert (if gap
+          (insert (if (and gap (> gap 0))
                       (format "           (%s break)\n"
                               (ts-human-format-duration gap))
                     "")
