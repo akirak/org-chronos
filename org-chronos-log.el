@@ -948,7 +948,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                       (-flatten-n 1)
                       (-sort (-on #'ts< (-compose #'org-chronos-clock-range-start #'car)))))
         prev)
-    (with-current-buffer (get-buffer-create "*timeline*")
+    (with-current-buffer (get-buffer-create "*org-chronos timeline*")
       (erase-buffer)
       (pcase-dolist (`(,clock . ,title) entries)
         (let* ((start (org-chronos-clock-range-start clock))
