@@ -482,10 +482,12 @@ output options."
                                   (if-let (link (org-chronos-heading-element-link x))
                                       (org-link-make-string (car link)
                                                             (org-chronos--trim-string-at-length
-                                                             (nth 1 link)
+                                                             (org-chronos--escape-link-description
+                                                              (nth 1 link))
                                                              org-chronos-trim-headline))
                                     (org-chronos--trim-string-at-length
-                                     (-last-item (org-chronos-heading-element-olp x))
+                                     (org-chronos--escape-link-description
+                                      (-last-item (org-chronos-heading-element-olp x)))
                                      org-chronos-trim-headline)))
                                  ('duration
                                   (org-duration-from-minutes (org-chronos--sum-minutes x)

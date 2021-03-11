@@ -207,5 +207,13 @@ and ends at the same time on the next day."
                                        org-chronos-beginning-of-day))))
     (list range-start (ts-adjust 'day 1 range-start))))
 
+(defun org-chronos--escape-link-description (text)
+  "Escape TEXT for putting in a link description."
+  (replace-regexp-in-string
+   ;; Remove pipes since they are used to denote table cells.
+   "|" "ǁ"
+   ;; Extract the link body
+   (org-link-display-format text)))
+
 (provide 'org-chronos-utils)
 ;;; org-chronos-utils.el ends here
