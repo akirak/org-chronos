@@ -954,6 +954,8 @@ from N hours ago."
                       (-flatten-n 1)
                       (-sort (-on #'ts< (-compose #'org-chronos-clock-range-start #'car)))))
         prev)
+    (unless entries
+      (user-error "No activity during the period"))
     (with-current-buffer (get-buffer-create "*org-chronos timeline*")
       (erase-buffer)
       (pcase-dolist (`(,clock . ,title) entries)
