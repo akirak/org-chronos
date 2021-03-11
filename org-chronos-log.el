@@ -817,7 +817,8 @@ period. The latter is optional."
 (defun org-chronos--log-closed-p (obj)
   "Return non-nil if a log object is after the end of the time range."
   (cl-check-type obj org-chronos-log)
-  (ts> (oref obj snapshot-time) (oref obj end)))
+  (when (ts> (oref obj snapshot-time) (oref obj end))
+    t))
 
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
