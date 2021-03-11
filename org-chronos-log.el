@@ -934,9 +934,15 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
 
 ;;;###autoload
 (defun org-chronos-timeline (start end)
-  "Display a timeline from START to END in a separate buffer."
-  (interactive (list (make-ts
-                      :unix (float-time (org-read-date t t nil "Start time: ")))
+  "Display a timeline from START to END in a separate buffer.
+
+If a numeric prefix argument is given, it displays activities
+from N hours ago."
+  (interactive (list (if (and (numberp current-prefix-arg)
+                              (> current-prefix-arg 0))
+                         (ts-adjust 'hour (- current-prefix-arg) (ts-now))
+                       (make-ts
+                        :unix (float-time (org-read-date t t nil "Start time: "))))
                      (ts-now)))
   (let ((entries (->> (org-chronos--search-headings-with-clock
                        (org-agenda-files) start end)
