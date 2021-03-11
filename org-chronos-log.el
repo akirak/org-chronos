@@ -871,11 +871,10 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (category (org-chronos--group-elements-by-category elements))))))
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
-            " taken at "
-            (ts-format "%F %R" (oref log snapshot-time))
             (if (org-chronos--log-closed-p log)
                 " (closed)"
-              " (not closed)")
+              (concat " (not closed) taken at "
+                      (ts-format "%F %R" (oref log snapshot-time))))
             "\n")
     (if (null (oref log data))
         (insert "There is no activity during this period yet.")
