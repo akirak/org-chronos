@@ -997,8 +997,10 @@ from N hours ago."
             (format-time-string (org-time-stamp-format t t) start)
             "--"
             (format-time-string (org-time-stamp-format t t) end)
+            ;; This is updated immediately
+            " => 0:00"
             "\n")
-    (org-end-of-line 0)
+    (org-beginning-of-line 0)
     (org-clock-update-time-maybe)))
 
 (provide 'org-chronos-log)
