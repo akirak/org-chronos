@@ -833,7 +833,8 @@ period. The latter is optional."
 
 PARAMS is a plist for dynamic block parameters. You can override
 the defaults by customizing `org-chronos-log-dblock-defaults'."
-  (let* ((params (org-combine-plists org-chronos-log-dblock-defaults params))
+  (let* ((initial-marker (point-marker))
+         (params (org-combine-plists org-chronos-log-dblock-defaults params))
          (span (plist-get params :span))
          (files (plist-get params :files))
          (sections-raw (plist-get params :sections))
@@ -877,6 +878,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                    (cl-ecase group
                      (tag (org-chronos--group-elements-by-tag elements))
                      (category (org-chronos--group-elements-by-category elements))))))
+    (goto-char initial-marker)
     (insert "#+CAPTION: Clock journal "
             (org-chronos--describe-range span range-start)
             (if (org-chronos--log-closed-p log)
