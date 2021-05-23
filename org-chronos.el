@@ -354,33 +354,40 @@ equal number of items."
   "Search headings with clock entries in a given time range.
 
 FIXME: FILES, FROM, and TO."
-  (->> (org-ql-select files
-         `(ts-inactive :from ,from :to ,to)
-         :action
-         `(org-save-outline-visibility t
-            (org-show-entry)
-            (let* ((logbook (org-chronos--parse-logbook))
-                   (clock-entries (-filter (lambda (x)
-                                             (ts-in ,from ,to (org-chronos-clock-range-start x)))
-                                           (plist-get logbook :clock-entries)))
-                   (log-notes (-filter (lambda (x)
-                                         (ts-in ,from ,to (org-chronos-log-note-timestamp x)))
-                                       (plist-get logbook :log-notes))))
-              (when (or clock-entries log-notes)
-                (make-org-chronos-heading-element
-                 :marker (point-marker)
-                 :link (when org-chronos-annotate-links
-                         (save-excursion
-                           (org-store-link nil 'interactive)
-                           (pop org-stored-links)))
-                 :olp (org-get-outline-path t t)
-                 :tags (org-get-tags)
-                 :category (org-get-category)
-                 :properties (org-chronos--collect-properties)
-                 :todo-state (org-get-todo-state)
-                 :log-notes log-notes
-                 :clock-entries clock-entries)))))
-       (-filter #'org-chronos--meaningful-element-p)))
+  (let (result)
+    (dolist (file files)
+      (with-current-buffer (or (find-buffer-visiting file)
+                               (find-file-noselect file))
+        (org-save-outline-visibility t
+          (org-with-wide-buffer
+           (org-show-all)
+           (push (org-ql-select (current-buffer)
+                   `(ts-inactive :from ,from :to ,to)
+                   :action
+                   `(let* ((logbook (org-chronos--parse-logbook))
+                           (clock-entries (-filter (lambda (x)
+                                                     (ts-in ,from ,to (org-chronos-clock-range-start x)))
+                                                   (plist-get logbook :clock-entries)))
+                           (log-notes (-filter (lambda (x)
+                                                 (ts-in ,from ,to (org-chronos-log-note-timestamp x)))
+                                               (plist-get logbook :log-notes))))
+                      (when (or clock-entries log-notes)
+                        (make-org-chronos-heading-element
+                         :marker (point-marker)
+                         :link (when org-chronos-annotate-links
+                                 (save-excursion
+                                   (org-store-link nil 'interactive)
+                                   (pop org-stored-links)))
+                         :olp (org-get-outline-path t t)
+                         :tags (org-get-tags)
+                         :category (org-get-category)
+                         :properties (org-chronos--collect-properties)
+                         :todo-state (org-get-todo-state)
+                         :log-notes log-notes
+                         :clock-entries clock-entries))))
+                 result)))))
+    (->> (-flatten-n 1 (nreverse result))
+      (-filter #'org-chronos--meaningful-element-p))))
 
 (defun org-chronos--collect-properties ()
   "Return an alist of property values specified in `org-chronos-logged-properties'."
