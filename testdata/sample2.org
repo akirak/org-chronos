@@ -1,0 +1,9 @@
+* DONE Better formatting of helm-octopus-scoped-ql
+CLOSED: [2021-04-09 Fri 13:11]
+:PROPERTIES:
+:CREATED_TIME: [2021-04-05 Mon 02:13]
+:END:
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2021-04-05 Mon 02:13]
+CLOCK: [2021-04-05 Mon 02:13]--[2021-04-05 Mon 02:21] =>  0:08
+:END:
