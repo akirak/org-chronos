@@ -67,7 +67,8 @@
 
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
-  marker olp tags category properties todo-state link log-notes clock-entries)
+  marker olp tags category properties todo-state link log-notes clock-entries
+  closed)
 
 ;;;; Custom variables
 
@@ -364,7 +365,14 @@ FIXME: FILES, FROM, and TO."
            (push (org-ql-select (current-buffer)
                    `(ts-inactive :from ,from :to ,to)
                    :action
-                   `(let* ((logbook (org-chronos--parse-logbook))
+                   `(let* ((closed (progn
+                                     ;; We are at the headline at the beginning,
+                                     ;; so move on to the next line.
+                                     (beginning-of-line 2)
+                                     (when (looking-at org-closed-time-regexp)
+                                       (re-search-forward org-ts-regexp-inactive)
+                                       (ts-parse-org (match-string 0)))))
+                           (logbook (org-chronos--parse-logbook))
                            (clock-entries (-filter (lambda (x)
                                                      (ts-in ,from ,to (org-chronos-clock-range-start x)))
                                                    (plist-get logbook :clock-entries)))
@@ -378,6 +386,7 @@ FIXME: FILES, FROM, and TO."
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
+                         :closed closed
                          :olp (org-get-outline-path t t)
                          :tags (org-get-tags)
                          :category (org-get-category)
@@ -744,6 +753,7 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
         (todo-state (org-chronos-heading-element-todo-state x))
         (link (org-chronos-heading-element-link x))
         (log-notes (org-chronos-heading-element-log-notes x))
+        (closed (org-chronos-heading-element-closed x))
         (clock-entries (org-chronos-heading-element-clock-entries x)))
     `((buffer . ,(buffer-name (marker-buffer marker)))
       (position . ,(marker-position marker))
@@ -756,6 +766,7 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
       (link . ,(car link))
       (category . ,(or category :null))
       (todo . ,(or todo-state :null))
+      (closed . ,(if closed (ts-format closed) :null))
       (log-notes . ,(apply #'vector
                            (-map #'org-chronos--json-serializable-object
                                  log-notes)))
