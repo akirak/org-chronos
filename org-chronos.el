@@ -85,7 +85,7 @@
 
 (defcustom org-chronos-log-dblock-defaults
   (list :span 'day :files #'org-agenda-files
-        :sections "groups,property-groups,entries")
+        :sections "groups,property-groups,entries,closed")
   "Default parameters of the Org dynamic block."
   :group 'org-chronos
   :type 'plist)
@@ -672,6 +672,44 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   "Return non-nil if OBJ has no entries."
   (null (org-chronos-entry-view-clocked-items-or-groups obj)))
 
+(cl-defstruct org-chronos-closed-items-view items-or-groups grouped time-format)
+
+(defun org-chronos-closed-items-view-closed-items (x)
+  "Returns items that have clock entries in X."
+  (->> (if (org-chronos-closed-items-view-grouped x)
+           (->> (org-chronos-closed-items-view-items-or-groups x)
+             (-map (pcase-lambda (`(,group . ,items))
+                     (--map (cons group it) items)))
+             (-flatten-n 1))
+         (--map (cons nil it) (org-chronos-closed-items-view-items-or-groups x)))
+    (--map (when-let (closed (org-chronos-heading-element-closed (cdr it)))
+             (cons closed it)))
+    (-non-nil)))
+
+(cl-defmethod org-chronos--write-org ((obj org-chronos-closed-items-view))
+  "Write OBJ as Org into the buffer."
+  (let ((time-format (org-chronos-closed-items-view-time-format obj))
+        (grouped (org-chronos-closed-items-view-grouped obj)))
+    (insert "(Closed items)\n"
+            (mapconcat (pcase-lambda (`(,time ,group . ,element))
+                         (format "- %s %s%s %s \\ %s"
+                                 (ts-format time-format time)
+                                 (org-chronos-heading-element-todo-state element)
+                                 (if grouped (concat " " group) (group) "")
+                                 (if-let (link (org-chronos-heading-element-link element))
+                                     (apply #'org-link-make-string link)
+                                   (-last-item (org-chronos-heading-element-olp element)))
+                                 (org-format-outline-path
+                                  (nreverse (-butlast (org-chronos-heading-element-olp element)))
+                                  nil nil " \\ ")))
+                       (->> (org-chronos-closed-items-view-closed-items obj)
+                         (-sort (-on #'ts< #'car)))
+                       "\n"))))
+
+(cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-closed-items-view))
+  "Return non-nil if OBJ has no entries."
+  (null (org-chronos-closed-items-view-closed-items obj)))
+
 (cl-defstruct org-chronos-group-statistic-view
   group-type groups show-percents)
 
@@ -861,7 +899,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (-> (cl-etypecase sections-raw
                            (string sections-raw)
                            (symbol (symbol-name sections-raw)))
-                         (split-string ","))))
+                       (split-string ","))))
          (range-start (org-chronos--ts-span-start
                        span
                        (if-let (start (plist-get params :start))
@@ -875,9 +913,9 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                (fbound (funcall files))
                                (list files)
                                (string files))
-                             (append (when org-chronos-scan-containing-file
-                                       (list (buffer-file-name))))
-                             (cl-delete-duplicates :test #'file-equal-p)))
+                           (append (when org-chronos-scan-containing-file
+                                     (list (buffer-file-name))))
+                           (cl-delete-duplicates :test #'file-equal-p)))
          (log (org-chronos--log-init :span span
                                      :files concrete-files
                                      :start range-start))
@@ -937,6 +975,15 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                  (month "%F"))
                   :todo-state t
                   :show-total t)
+                 views))
+          ("closed"
+           (push (make-org-chronos-closed-items-view
+                  :items-or-groups (or groups elements)
+                  :grouped group
+                  :time-format (cl-ecase span
+                                 (day "%R")
+                                 (week "%F %a")
+                                 (month "%F")))
                  views))
           (_
            (error "Unsupported section type: %s" section))))
