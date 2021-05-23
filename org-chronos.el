@@ -692,13 +692,15 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
         (grouped (org-chronos-closed-items-view-grouped obj)))
     (insert "(Closed items)\n"
             (mapconcat (pcase-lambda (`(,time ,group . ,element))
-                         (format "- %s %s%s %s \\ %s"
+                         (format "- %s %s%s %s (%s in sum) \\ %s"
                                  (ts-format time-format time)
                                  (org-chronos-heading-element-todo-state element)
                                  (if grouped (concat " " group) (group) "")
                                  (if-let (link (org-chronos-heading-element-link element))
                                      (apply #'org-link-make-string link)
                                    (-last-item (org-chronos-heading-element-olp element)))
+                                 (org-with-point-at (org-chronos-heading-element-marker element)
+                                   (org-duration-from-minutes (org-clock-sum-current-item)))
                                  (org-format-outline-path
                                   (nreverse (-butlast (org-chronos-heading-element-olp element)))
                                   nil nil " \\ ")))
