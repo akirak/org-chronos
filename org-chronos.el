@@ -386,7 +386,9 @@ FIXME: FILES, FROM, and TO."
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
-                         :closed closed
+                         :closed (when (and closed
+                                            (ts-in ,from ,to closed))
+                                   closed)
                          :olp (org-get-outline-path t t)
                          :tags (org-get-tags)
                          :category (org-get-category)
