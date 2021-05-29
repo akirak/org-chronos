@@ -385,27 +385,31 @@ FIXME: FILES, FROM, and TO."
                                      (when (looking-at org-closed-time-regexp)
                                        (re-search-forward org-ts-regexp-inactive)
                                        (ts-parse-org (match-string 0)))))
+                           ;; Ignore values that are not within the range.
+                           (closed (when (and closed
+                                              (ts-in ,from ,to closed))
+                                     closed))
                            (logbook (org-chronos--parse-logbook))
                            (clock-entries (-filter (lambda (x)
                                                      (ts-in ,from ,to (org-chronos-clock-range-start x)))
                                                    (plist-get logbook :clock-entries)))
                            (created (org-chronos--entry-creation-time))
+                           ;; Ignore values that are not within the range.
+                           (created (when (and created
+                                               (ts-in ,from ,to created))
+                                      created))
                            (log-notes (-filter (lambda (x)
                                                  (ts-in ,from ,to (org-chronos-log-note-timestamp x)))
                                                (plist-get logbook :log-notes))))
-                      (when (or clock-entries log-notes)
+                      (when (or clock-entries log-notes created closed)
                         (make-org-chronos-heading-element
                          :marker (point-marker)
                          :link (when org-chronos-annotate-links
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
-                         :closed (when (and closed
-                                            (ts-in ,from ,to closed))
-                                   closed)
-                         :created (when (and created
-                                             (ts-in ,from ,to created))
-                                    created)
+                         :closed closed
+                         :created created
                          :olp (org-get-outline-path t t)
                          :tags (org-get-tags)
                          :category (org-get-category)
