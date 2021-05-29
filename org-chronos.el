@@ -68,7 +68,7 @@
 (cl-defstruct org-chronos-heading-element
   "Structure that holds information on a heading with clock entries."
   marker olp tags category properties todo-state link log-notes clock-entries
-  closed)
+  closed created)
 
 ;;;; Custom variables
 
@@ -85,7 +85,7 @@
 
 (defcustom org-chronos-log-dblock-defaults
   (list :span 'day :files #'org-agenda-files
-        :sections "groups,property-groups,entries,closed")
+        :sections "groups,property-groups,entries,closed,created")
   "Default parameters of the Org dynamic block."
   :group 'org-chronos
   :type 'plist)
@@ -156,6 +156,13 @@ time span."
   :group 'org-chronos
   :type 'directory)
 
+(defcustom org-chronos-creation-time-property nil
+  "Name of an Org property used to track creation time of an entry.
+
+Values of the property must be an inactive timestamp."
+  :group 'org-chronos
+  :type '(choice string null))
+
 ;;;; Log object
 
 (defclass org-chronos-log ()
@@ -224,6 +231,12 @@ time span."
          (save-restriction
            (narrow-to-region (point) logbook-end)
            ,@progn)))))
+
+(defun org-chronos--entry-creation-time ()
+  (when org-chronos-creation-time-property
+    (-some->> (org-entry-get nil org-chronos-creation-time-property)
+      (ts-parse-org)
+      (ts-update))))
 
 (defun org-chronos--clock-entries-on-heading ()
   "Return clock entries on the current Org heading after the point."
@@ -372,23 +385,31 @@ FIXME: FILES, FROM, and TO."
                                      (when (looking-at org-closed-time-regexp)
                                        (re-search-forward org-ts-regexp-inactive)
                                        (ts-parse-org (match-string 0)))))
+                           ;; Ignore values that are not within the range.
+                           (closed (when (and closed
+                                              (ts-in ,from ,to closed))
+                                     closed))
                            (logbook (org-chronos--parse-logbook))
                            (clock-entries (-filter (lambda (x)
                                                      (ts-in ,from ,to (org-chronos-clock-range-start x)))
                                                    (plist-get logbook :clock-entries)))
+                           (created (org-chronos--entry-creation-time))
+                           ;; Ignore values that are not within the range.
+                           (created (when (and created
+                                               (ts-in ,from ,to created))
+                                      created))
                            (log-notes (-filter (lambda (x)
                                                  (ts-in ,from ,to (org-chronos-log-note-timestamp x)))
                                                (plist-get logbook :log-notes))))
-                      (when (or clock-entries log-notes)
+                      (when (or clock-entries log-notes created closed)
                         (make-org-chronos-heading-element
                          :marker (point-marker)
                          :link (when org-chronos-annotate-links
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
-                         :closed (when (and closed
-                                            (ts-in ,from ,to closed))
-                                   closed)
+                         :closed closed
+                         :created created
                          :olp (org-get-outline-path t t)
                          :tags (org-get-tags)
                          :category (org-get-category)
@@ -714,6 +735,44 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   "Return non-nil if OBJ has no entries."
   (null (org-chronos-closed-items-view-closed-items obj)))
 
+(cl-defstruct org-chronos-created-items-view items-or-groups grouped time-format)
+
+(defun org-chronos-created-items-view-created-items (x)
+  "Returns items that have clock entries in X."
+  (->> (if (org-chronos-created-items-view-grouped x)
+           (->> (org-chronos-created-items-view-items-or-groups x)
+             (-map (pcase-lambda (`(,group . ,items))
+                     (--map (cons group it) items)))
+             (-flatten-n 1))
+         (--map (cons nil it) (org-chronos-created-items-view-items-or-groups x)))
+    (--map (when-let (created (org-chronos-heading-element-created (cdr it)))
+             ;; Don't report items that were closed during the period.
+             (unless (org-chronos-heading-element-closed (cdr it))
+               (cons created it))))
+    (-non-nil)))
+
+(cl-defmethod org-chronos--write-org ((obj org-chronos-created-items-view))
+  "Write OBJ as Org into the buffer."
+  (let ((time-format (org-chronos-created-items-view-time-format obj))
+        (grouped (org-chronos-created-items-view-grouped obj)))
+    (insert "(New items)\n"
+            (mapconcat (pcase-lambda (`(,time ,group . ,element))
+                         (format "- %s%s \\ %s"
+                                 (if grouped (concat group " ") "")
+                                 (if-let (link (org-chronos-heading-element-link element))
+                                     (apply #'org-link-make-string link)
+                                   (-last-item (org-chronos-heading-element-olp element)))
+                                 (org-format-outline-path
+                                  (nreverse (-butlast (org-chronos-heading-element-olp element)))
+                                  nil nil " \\ ")))
+                       (->> (org-chronos-created-items-view-created-items obj)
+                         (-sort (-on #'ts< #'car)))
+                       "\n"))))
+
+(cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-created-items-view))
+  "Return non-nil if OBJ has no entries."
+  (null (org-chronos-created-items-view-created-items obj)))
+
 (cl-defstruct org-chronos-group-statistic-view
   group-type groups show-percents)
 
@@ -796,6 +855,7 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
         (link (org-chronos-heading-element-link x))
         (log-notes (org-chronos-heading-element-log-notes x))
         (closed (org-chronos-heading-element-closed x))
+        (created (org-chronos-heading-element-created x))
         (clock-entries (org-chronos-heading-element-clock-entries x)))
     `((buffer . ,(buffer-name (marker-buffer marker)))
       (position . ,(marker-position marker))
@@ -809,6 +869,7 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
       (category . ,(or category :null))
       (todo . ,(or todo-state :null))
       (closed . ,(if closed (ts-format closed) :null))
+      (created . ,(if created (ts-format created) :null))
       (log-notes . ,(apply #'vector
                            (-map #'org-chronos--json-serializable-object
                                  log-notes)))
@@ -982,6 +1043,15 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                  views))
           ("closed"
            (push (make-org-chronos-closed-items-view
+                  :items-or-groups (or groups elements)
+                  :grouped group
+                  :time-format (cl-ecase span
+                                 (day "%R")
+                                 (week "%F %a")
+                                 (month "%F")))
+                 views))
+          ("created"
+           (push (make-org-chronos-created-items-view
                   :items-or-groups (or groups elements)
                   :grouped group
                   :time-format (cl-ecase span
