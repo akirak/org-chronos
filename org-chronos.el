@@ -676,11 +676,12 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   "Returns items that have clock entries in X."
   (if (org-chronos-entry-view-grouped x)
       (->> (org-chronos-entry-view-items-or-groups x)
-           (-map (pcase-lambda (`(,group . ,items))
-                   (cons group
-                         (-filter #'org-chronos-heading-element-clock-entries items)))))
+        (-map (pcase-lambda (`(,group . ,items))
+                (cons group
+                      (-filter #'org-chronos-heading-element-clock-entries items))))
+        (-filter #'cdr))
     (->> (org-chronos-entry-view-items-or-groups x)
-         (-filter #'org-chronos-heading-element-clock-entries))))
+      (-filter #'org-chronos-heading-element-clock-entries))))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-entry-view))
   "Write OBJ as Org into the buffer."
