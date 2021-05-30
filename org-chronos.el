@@ -748,7 +748,10 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
          (--map (cons nil it) (org-chronos-created-items-view-items-or-groups x)))
     (--map (when-let (created (org-chronos-heading-element-created (cdr it)))
              ;; Don't report items that were closed during the period.
-             (unless (org-chronos-heading-element-closed (cdr it))
+             (unless (or (org-chronos-heading-element-closed (cdr it))
+                         ;; Don't report items in the same buffer as the evaluation context.
+                         (equal (current-buffer)
+                                (marker-buffer (org-chronos-heading-element-marker (cdr it)))))
                (cons created it))))
     (-non-nil)))
 
