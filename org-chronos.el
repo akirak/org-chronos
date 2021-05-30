@@ -163,6 +163,11 @@ Values of the property must be an inactive timestamp."
   :group 'org-chronos
   :type '(choice string null))
 
+(defcustom org-chronos-reduce-nested-entries t
+  "Whether to exclude nested entries from certain views in the report."
+  :group 'org-chronos
+  :type 'boolean)
+
 ;;;; Log object
 
 (defclass org-chronos-log ()
@@ -708,7 +713,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
          (--map (cons nil it) (org-chronos-closed-items-view-items-or-groups x)))
     (--map (when-let (closed (org-chronos-heading-element-closed (cdr it)))
              (cons closed it)))
-    (-non-nil)))
+    (-non-nil)
+    (org-chronos--reduce-nested-entries)))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-closed-items-view))
   "Write OBJ as Org into the buffer."
@@ -753,7 +759,8 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
                          (equal (current-buffer)
                                 (marker-buffer (org-chronos-heading-element-marker (cdr it)))))
                (cons created it))))
-    (-non-nil)))
+    (-non-nil)
+    (org-chronos--reduce-nested-entries)))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-created-items-view))
   "Write OBJ as Org into the buffer."
@@ -790,6 +797,33 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
 (cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-group-statistic-view))
   "Return non-nil if OBJ has no entries."
   (-all-p (-compose #'null #'cdr) (org-chronos-group-statistic-view-groups obj)))
+
+(defun org-chronos--reduce-nested-entries (items)
+  "If necessary, exclude nested entries from ITEMS."
+  (if org-chronos-reduce-nested-entries
+      (->> (--group-by (nth 1 it) items)
+        (-map #'cdr)
+        (-map (lambda (entries-in-group)
+                (->> (--group-by (marker-buffer
+                                  (org-chronos-heading-element-marker (cddr it)))
+                                 entries-in-group)
+                  (-map #'cdr)
+                  (-map #'org-chronos--reduce-by-olp))))
+        (-flatten-n 2))
+    items))
+
+(defun org-chronos--reduce-by-olp (items)
+  "Check olps in ITEMS and eliminate nested entries."
+  (let (result)
+    (dolist (group-by-depth (->> items
+                              (--map (cons (org-chronos-heading-element-olp (cddr it)) it))
+                              (-group-by (-compose #'length #'car))
+                              (-sort (-on #'< #'car))
+                              (-map #'cdr)))
+      (dolist (item group-by-depth)
+        (unless (--find (-is-prefix-p (car it) (car item)) result)
+          (push item result))))
+    (-map #'cdr result)))
 
 ;;;; Exporting
 (cl-defun org-chronos--export-log-to-json (log out-file
