@@ -769,7 +769,7 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
     (insert "(New items)\n"
             (mapconcat (pcase-lambda (`(,time ,group . ,element))
                          (format "- %s%s \\ %s"
-                                 (if grouped (concat group " ") "")
+                                 (if (and grouped group) (concat group " ") "")
                                  (if-let (link (org-chronos-heading-element-link element))
                                      (apply #'org-link-make-string link)
                                    (-last-item (org-chronos-heading-element-olp element)))
