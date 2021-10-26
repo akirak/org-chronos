@@ -280,27 +280,35 @@ Values of the property must be an inactive timestamp."
 PATTERN should be the cdr of one of the items in
 `org-log-note-headings'."
   (--> pattern
-    (replace-regexp-in-string
-     (rx "%" (?  "-") (* (any digit)) (any "td"))
-     (replace-regexp-in-string
-      "\\\\" "\\\\\\\\"
-      (org-re-timestamp 'inactive))
-     it t)
-    (replace-regexp-in-string
-     (rx "%" (?  "-") (* (any digit)) (any "TD"))
-     (replace-regexp-in-string
-      "\\\\" "\\\\\\\\"
-      (org-re-timestamp 'active))
-     it t)
-    (replace-regexp-in-string
-     (rx "%" (?  "-") (* (any digit)) (any "sS"))
-     (replace-regexp-in-string
-      "\\\\" "\\\\\\\\"
-      (rx (* space)
-          (group (?  "\"" (+ (any upper)) "\""))
-          (* space)))
-     it t)
-    (concat (rx (* space) "- ") it)))
+       (replace-regexp-in-string
+        (rx "%" (?  "-") (* (any digit)) (any "td"))
+        (replace-regexp-in-string
+         "\\\\" "\\\\\\\\"
+         (org-re-timestamp 'inactive))
+        it t)
+       (replace-regexp-in-string
+        (rx "%" (?  "-") (* (any digit)) (any "TD"))
+        (replace-regexp-in-string
+         "\\\\" "\\\\\\\\"
+         (org-re-timestamp 'active))
+        it t)
+       (replace-regexp-in-string
+        (rx "%" (?  "-") (* (any digit)) (any "sS"))
+        (replace-regexp-in-string
+         "\\\\" "\\\\\\\\"
+         (rx (* space)
+             (?  "\""
+                 (regexp org-todo-regexp)
+                 ;; %s and %S can be a timestamp as well.
+                 ;; I haven't found actual use of such a pattern,
+                 ;; but I have to support it in the future.
+                 ;;
+                 ;; (or (regexp org-todo-regexp)
+                 ;;     (regexp (org-re-timestamp 'inactive)))
+                 "\"")
+             (* space)))
+        it t)
+       (concat (rx (* space) "- ") it)))
 
 (defun org-chronos--parse-log-note-heading ()
   "Parse a log note heading in the buffer.
