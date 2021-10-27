@@ -366,21 +366,23 @@ This function parses a log note at point and returns an object of
 Both PLACEHOLDERS and MATCH-STRINGS must be a list that have an
 equal number of items."
   (->> (-zip (--map (nth 1 it) placeholders) match-strings)
-    (-map (pcase-lambda (`(,c . ,s))
-            (cl-labels
-                ((parse-todo
-                  (raw)
-                  (when (string-match
-                         (rx bol "\"" (group (+ anything)) "\"" eol)
-                         raw)
-                    (match-string 1 raw))))
-              (pcase c
-                ("t" (cons 'timestamp s))
-                ("T" (cons 'timestamp s))
-                ("d" (cons 'timestamp s))
-                ("D" (cons 'timestamp s))
-                ("s" (cons 'old-todo (parse-todo s)))
-                ("S" (cons 'new-todo (parse-todo s)))))))))
+       (-map (pcase-lambda (`(,c . ,s))
+               (cl-labels
+                   ((parse-todo
+                     (raw)
+                     (save-match-data
+                       (when (and raw
+                                  (string-match
+                                   (rx bol "\"" (group (+ anything)) "\"" eol)
+                                   raw))
+                         (match-string 1 raw)))))
+                 (pcase c
+                   ("t" (cons 'timestamp s))
+                   ("T" (cons 'timestamp s))
+                   ("d" (cons 'timestamp s))
+                   ("D" (cons 'timestamp s))
+                   ("s" (cons 'old-todo (parse-todo s)))
+                   ("S" (cons 'new-todo (parse-todo s)))))))))
 
 (defun org-chronos--search-headings-with-clock (files from to)
   "Search headings with clock entries in a given time range.
