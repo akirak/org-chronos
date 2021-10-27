@@ -255,24 +255,29 @@ Values of the property must be an inactive timestamp."
 (defun org-chronos--parse-logbook ()
   "Return clock entries on the current Org heading after the point."
   (org-chronos--with-logbook
-   (let (clock-entries
-         log-notes)
-     (catch 'finish
-       (while (not (eobp))
-         (cond
-          ((looking-at org-clock-line-re)
-           (when-let (range (org-chronos--parse-clock-line))
-             (push range clock-entries))
-           (forward-line))
-          ((looking-at (rx (* space) "- "))
-           (push (org-chronos--parse-log-note-heading)
-                 log-notes))
-          ((looking-at org-clock-drawer-end-re)
-           (throw 'finish t))
-          (t
-           (beginning-of-line 2)))))
-     (list :clock-entries clock-entries
-           :log-notes log-notes))))
+   (condition-case err
+       (let (clock-entries
+             log-notes)
+         (catch 'finish
+           (while (not (eobp))
+             (cond
+              ((looking-at org-clock-line-re)
+               (when-let (range (org-chronos--parse-clock-line))
+                 (push range clock-entries))
+               (forward-line))
+              ((looking-at (rx (* space) "- "))
+               (push (org-chronos--parse-log-note-heading)
+                     log-notes))
+              ((looking-at org-clock-drawer-end-re)
+               (throw 'finish t))
+              (t
+               (beginning-of-line 2)))))
+         (list :clock-entries clock-entries
+               :log-notes log-notes))
+     (error (error "Error while parsing logbook at %d in %s: %s"
+                   (point)
+                   (buffer-file-name)
+                   err)))))
 
 (defun org-chronos--log-note-heading-to-re (pattern)
   "Convert a log note pattern to a regular expression.
