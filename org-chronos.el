@@ -103,9 +103,12 @@ containing file to the source files."
 
 Note that a link is produced on every entry having clock
 entries. This may lead to generating IDs if you have turned on
-`org-id-link-to-org-use-id'."
+`org-id-link-to-org-use-id'.
+
+The value can also be a function that takes no argument and
+returns a boolean value."
   :group 'org-chronos
-  :type 'boolean)
+  :type '(choice boolean function))
 
 (defcustom org-chronos-trim-headline 50
   "Maximimal length of headlines in Org dynamic block output."
@@ -424,7 +427,9 @@ FIXME: FILES, FROM, and TO."
                       (when (or clock-entries log-notes created closed)
                         (make-org-chronos-heading-element
                          :marker (point-marker)
-                         :link (when org-chronos-annotate-links
+                         :link (when (if (functionp org-chronos-annotate-links)
+                                         (funcall org-chronos-annotate-links)
+                                       org-chronos-annotate-links)
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
@@ -439,7 +444,7 @@ FIXME: FILES, FROM, and TO."
                          :clock-entries clock-entries))))
                  result)))))
     (->> (-flatten-n 1 (nreverse result))
-      (-filter #'org-chronos--meaningful-element-p))))
+         (-filter #'org-chronos--meaningful-element-p))))
 
 (defun org-chronos--collect-properties ()
   "Return an alist of property values specified in `org-chronos-logged-properties'."
