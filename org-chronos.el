@@ -103,9 +103,12 @@ containing file to the source files."
 
 Note that a link is produced on every entry having clock
 entries. This may lead to generating IDs if you have turned on
-`org-id-link-to-org-use-id'."
+`org-id-link-to-org-use-id'.
+
+The value can also be a function that takes no argument and
+returns a boolean value."
   :group 'org-chronos
-  :type 'boolean)
+  :type '(choice boolean function))
 
 (defcustom org-chronos-trim-headline 50
   "Maximimal length of headlines in Org dynamic block output."
@@ -424,7 +427,9 @@ FIXME: FILES, FROM, and TO."
                       (when (or clock-entries log-notes created closed)
                         (make-org-chronos-heading-element
                          :marker (point-marker)
-                         :link (when org-chronos-annotate-links
+                         :link (when (if (functionp org-chronos-annotate-links)
+                                         (funcall org-chronos-annotate-links)
+                                       org-chronos-annotate-links)
                                  (save-excursion
                                    (org-store-link nil 'interactive)
                                    (pop org-stored-links)))
@@ -439,7 +444,7 @@ FIXME: FILES, FROM, and TO."
                          :clock-entries clock-entries))))
                  result)))))
     (->> (-flatten-n 1 (nreverse result))
-      (-filter #'org-chronos--meaningful-element-p))))
+         (-filter #'org-chronos--meaningful-element-p))))
 
 (defun org-chronos--collect-properties ()
   "Return an alist of property values specified in `org-chronos-logged-properties'."
@@ -1002,6 +1007,22 @@ period. The latter is optional."
   (when (ts> (oref obj snapshot-time) (oref obj end))
     t))
 
+(defun org-chronos--expand-files (files)
+  "Expand FILES parameter."
+  (cl-flet
+      ((expand-source (source)
+                      (cl-etypecase source
+                        (function (funcall source))
+                        (bound (symbol-value source))
+                        (list source)
+                        (string source))))
+    (-> (if (listp files)
+            (-flatten-n 1 (-map #'expand-source files))
+          (expand-source files))
+        (append (when org-chronos-scan-containing-file
+                  (list (buffer-file-name))))
+        (cl-delete-duplicates :test #'file-equal-p))))
+
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
 
@@ -1017,7 +1038,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (-> (cl-etypecase sections-raw
                            (string sections-raw)
                            (symbol (symbol-name sections-raw)))
-                       (split-string ","))))
+                         (split-string ","))))
          (range-start (org-chronos--ts-span-start
                        span
                        (if-let (start (plist-get params :start))
@@ -1027,13 +1048,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                        (symbol (symbol-name start))
                                        (string start))))
                          (org-chronos--find-date-in-heading))))
-         (concrete-files (-> (cl-etypecase files
-                               (fbound (funcall files))
-                               (list files)
-                               (string files))
-                           (append (when org-chronos-scan-containing-file
-                                     (list (buffer-file-name))))
-                           (cl-delete-duplicates :test #'file-equal-p)))
+         (concrete-files (org-chronos--expand-files files))
          (log (org-chronos--log-init :span span
                                      :files concrete-files
                                      :start range-start))
