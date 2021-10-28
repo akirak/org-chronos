@@ -241,6 +241,10 @@ Values of the property must be an inactive timestamp."
            ,@progn)))))
 
 (defun org-chronos--entry-creation-time ()
+  "Return the creation time of the entry.
+
+This looks up the value of `org-chronos-creation-time-property'
+if set, and converts it to a ts value."
   (when org-chronos-creation-time-property
     (-some->> (org-entry-get nil org-chronos-creation-time-property)
       (ts-parse-org)
@@ -364,7 +368,7 @@ This function parses a log note at point and returns an object of
                       :comment comment)))))))))
 
 (defun org-chronos--analyse-log-note-data (placeholders match-strings)
-  "Given the parsing result, returns an alist of data.
+  "Given the parsing result, return an alist of data.
 
 Both PLACEHOLDERS and MATCH-STRINGS must be a list that have an
 equal number of items."
@@ -698,15 +702,15 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   items-or-groups grouped time-format todo-state show-total)
 
 (defun org-chronos-entry-view-clocked-items-or-groups (x)
-  "Returns items that have clock entries in X."
+  "Return items that have clock entries in X."
   (if (org-chronos-entry-view-grouped x)
       (->> (org-chronos-entry-view-items-or-groups x)
-        (-map (pcase-lambda (`(,group . ,items))
-                (cons group
-                      (-filter #'org-chronos-heading-element-clock-entries items))))
-        (-filter #'cdr))
+           (-map (pcase-lambda (`(,group . ,items))
+                   (cons group
+                         (-filter #'org-chronos-heading-element-clock-entries items))))
+           (-filter #'cdr))
     (->> (org-chronos-entry-view-items-or-groups x)
-      (-filter #'org-chronos-heading-element-clock-entries))))
+         (-filter #'org-chronos-heading-element-clock-entries))))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-entry-view))
   "Write OBJ as Org into the buffer."
@@ -724,17 +728,17 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
 (cl-defstruct org-chronos-closed-items-view items-or-groups grouped time-format)
 
 (defun org-chronos-closed-items-view-closed-items (x)
-  "Returns items that have clock entries in X."
+  "Return items that have clock entries in X."
   (->> (if (org-chronos-closed-items-view-grouped x)
            (->> (org-chronos-closed-items-view-items-or-groups x)
-             (-map (pcase-lambda (`(,group . ,items))
-                     (--map (cons group it) items)))
-             (-flatten-n 1))
+                (-map (pcase-lambda (`(,group . ,items))
+                        (--map (cons group it) items)))
+                (-flatten-n 1))
          (--map (cons nil it) (org-chronos-closed-items-view-items-or-groups x)))
-    (--map (when-let (closed (org-chronos-heading-element-closed (cdr it)))
-             (cons closed it)))
-    (-non-nil)
-    (org-chronos--reduce-nested-entries)))
+       (--map (when-let (closed (org-chronos-heading-element-closed (cdr it)))
+                (cons closed it)))
+       (-non-nil)
+       (org-chronos--reduce-nested-entries)))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-closed-items-view))
   "Write OBJ as Org into the buffer."
@@ -765,28 +769,28 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
 (cl-defstruct org-chronos-created-items-view items-or-groups grouped time-format)
 
 (defun org-chronos-created-items-view-created-items (x)
-  "Returns items that have clock entries in X."
+  "Return items that have clock entries in X."
   (->> (if (org-chronos-created-items-view-grouped x)
            (->> (org-chronos-created-items-view-items-or-groups x)
-             (-map (pcase-lambda (`(,group . ,items))
-                     (--map (cons group it) items)))
-             (-flatten-n 1))
+                (-map (pcase-lambda (`(,group . ,items))
+                        (--map (cons group it) items)))
+                (-flatten-n 1))
          (--map (cons nil it) (org-chronos-created-items-view-items-or-groups x)))
-    (--map (when-let (created (org-chronos-heading-element-created (cdr it)))
-             ;; Don't report items that were closed during the period.
-             (unless (or (org-chronos-heading-element-closed (cdr it))
-                         ;; Don't report items in the same buffer as the evaluation context.
-                         (equal (current-buffer)
-                                (marker-buffer (org-chronos-heading-element-marker (cdr it)))))
-               (cons created it))))
-    (-non-nil)
-    (org-chronos--reduce-nested-entries)))
+       (--map (when-let (created (org-chronos-heading-element-created (cdr it)))
+                ;; Don't report items that were closed during the period.
+                (unless (or (org-chronos-heading-element-closed (cdr it))
+                            ;; Don't report items in the same buffer as the evaluation context.
+                            (equal (current-buffer)
+                                   (marker-buffer (org-chronos-heading-element-marker (cdr it)))))
+                  (cons created it))))
+       (-non-nil)
+       (org-chronos--reduce-nested-entries)))
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-created-items-view))
   "Write OBJ as Org into the buffer."
   (let ((grouped (org-chronos-created-items-view-grouped obj)))
     (insert "(New items)\n"
-            (mapconcat (pcase-lambda (`(,time ,group . ,element))
+            (mapconcat (pcase-lambda (`(,_ ,group . ,element))
                          (format "- %s%s \\ %s"
                                  (if (and grouped group) (concat group " ") "")
                                  (if-let (link (org-chronos-heading-element-link element))
@@ -794,9 +798,11 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
                                    (-last-item (org-chronos-heading-element-olp element)))
                                  (org-format-outline-path
                                   (nreverse (-butlast (org-chronos-heading-element-olp element)))
-                                  nil nil " \\ ")))
+                                  nil
+                                  nil
+                                  " \\ ")))
                        (->> (org-chronos-created-items-view-created-items obj)
-                         (-sort (-on #'ts< #'car)))
+                            (-sort (-on #'ts< #'car)))
                        "\n"))))
 
 (cl-defmethod org-chronos--write-org-null-p ((obj org-chronos-created-items-view))
@@ -872,7 +878,10 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
                                                    group-type groups
                                                    closed
                                                    files)
-  "FIXME: SPAN START END ELEMENTS GROUP-TYPE GROUPS FILES."
+  "Build an alist that should be converted to json for exporting.
+
+See `org-chronos--export-log-to-json' for the following parameters:
+SPAN, START, END, ELEMENTS, GROUP-TYPE, GROUPS, CLOSED, FILES."
   `((version . ,org-chronos-json-version)
     (closed . ,(if closed t :false))
     (source . ((files . ,(apply #'vector files))))
@@ -1000,10 +1009,10 @@ period. The latter is optional."
                   (oref obj start)
                   (oref obj end))))
 
-(defun org-chronos--log-closed-p (obj)
-  "Return non-nil if a log object is after the end of the time range."
-  (cl-check-type obj org-chronos-log)
-  (when (ts> (oref obj snapshot-time) (oref obj end))
+(defun org-chronos--log-closed-p (object)
+  "Return non-nil if a log OBJECT is exceeds the end of its range."
+  (cl-check-type object org-chronos-log)
+  (when (ts> (oref object snapshot-time) (oref object end))
     t))
 
 (defun org-dblock-write:clock-journal (params)
