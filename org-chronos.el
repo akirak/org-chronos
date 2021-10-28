@@ -41,7 +41,7 @@
 
 (defgroup org-chronos
   nil
-  "FIXME: Describe the group"
+  "A time-tracking framework for Org."
   :group 'org
   :group 'org-clock)
 
