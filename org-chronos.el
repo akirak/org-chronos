@@ -784,8 +784,7 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
 
 (cl-defmethod org-chronos--write-org ((obj org-chronos-created-items-view))
   "Write OBJ as Org into the buffer."
-  (let ((time-format (org-chronos-created-items-view-time-format obj))
-        (grouped (org-chronos-created-items-view-grouped obj)))
+  (let ((grouped (org-chronos-created-items-view-grouped obj)))
     (insert "(New items)\n"
             (mapconcat (pcase-lambda (`(,time ,group . ,element))
                          (format "- %s%s \\ %s"
