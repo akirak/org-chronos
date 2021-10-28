@@ -1002,6 +1002,22 @@ period. The latter is optional."
   (when (ts> (oref obj snapshot-time) (oref obj end))
     t))
 
+(defun org-chronos--expand-files (files)
+  "Expand FILES parameter."
+  (cl-flet
+      ((expand-source (source)
+                      (cl-etypecase source
+                        (function (funcall source))
+                        (bound (symbol-value source))
+                        (list source)
+                        (string source))))
+    (-> (if (listp files)
+            (-flatten-n 1 (-map #'expand-source files))
+          (expand-source files))
+        (append (when org-chronos-scan-containing-file
+                  (list (buffer-file-name))))
+        (cl-delete-duplicates :test #'file-equal-p))))
+
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
 
@@ -1017,7 +1033,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (-> (cl-etypecase sections-raw
                            (string sections-raw)
                            (symbol (symbol-name sections-raw)))
-                       (split-string ","))))
+                         (split-string ","))))
          (range-start (org-chronos--ts-span-start
                        span
                        (if-let (start (plist-get params :start))
@@ -1027,13 +1043,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                        (symbol (symbol-name start))
                                        (string start))))
                          (org-chronos--find-date-in-heading))))
-         (concrete-files (-> (cl-etypecase files
-                               (fbound (funcall files))
-                               (list files)
-                               (string files))
-                           (append (when org-chronos-scan-containing-file
-                                     (list (buffer-file-name))))
-                           (cl-delete-duplicates :test #'file-equal-p)))
+         (concrete-files (org-chronos--expand-files files))
          (log (org-chronos--log-init :span span
                                      :files concrete-files
                                      :start range-start))
