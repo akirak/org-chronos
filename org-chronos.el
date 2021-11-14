@@ -110,7 +110,7 @@ returns a boolean value."
   :group 'org-chronos
   :type '(choice boolean function))
 
-(defcustom org-chronos-trim-headline 50
+(defcustom org-chronos-trim-headline 25
   "Maximimal length of headlines in Org dynamic block output."
   :group 'org-chronos
   :type '(choice number null))
