@@ -1016,6 +1016,14 @@ period. The latter is optional."
   (when (ts> (oref object snapshot-time) (oref object end))
     t))
 
+(defun org-chronos--uniq-file-names (filenames)
+  "Normalize FILENAMES and remove duplicates from them."
+  ;; `file-truename' is slow, so we want to apply the function only once per
+  ;; file.
+  (cl-delete-duplicates
+   (--map (abbreviate-file-name (file-truename it)) filenames)
+   :test #'string-equal))
+
 (defun org-dblock-write:clock-journal (params)
   "Dynamic block for reporting activities for a certain period.
 
@@ -1031,7 +1039,7 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                      (-> (cl-etypecase sections-raw
                            (string sections-raw)
                            (symbol (symbol-name sections-raw)))
-                       (split-string ","))))
+                         (split-string ","))))
          (range-start (org-chronos--ts-span-start
                        span
                        (if-let (start (plist-get params :start))
@@ -1045,9 +1053,9 @@ the defaults by customizing `org-chronos-log-dblock-defaults'."
                                (fbound (funcall files))
                                (list files)
                                (string files))
-                           (append (when org-chronos-scan-containing-file
-                                     (list (buffer-file-name))))
-                           (cl-delete-duplicates :test #'file-equal-p)))
+                             (append (when org-chronos-scan-containing-file
+                                       (list (buffer-file-name))))
+                             (org-chronos--uniq-file-names)))
          (log (org-chronos--log-init :span span
                                      :files concrete-files
                                      :start range-start))
