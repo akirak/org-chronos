@@ -171,6 +171,20 @@ Values of the property must be an inactive timestamp."
   :group 'org-chronos
   :type 'boolean)
 
+(defcustom org-chronos-json-formatter 'jq
+  "Formatter applied to exported to JSON files."
+  :group 'org-chronos
+  :type '(choice (const :tag "jq" jq)
+
+                 null))
+
+(defcustom org-chronos-jq-executable "jq"
+  "Executable of jq.
+
+See `org-chronos-json-formatter'."
+  :group 'org-chronos
+  :type 'file)
+
 ;;;; Log object
 
 (defclass org-chronos-log ()
@@ -873,6 +887,15 @@ Optionally, it can take a list of GROUPS and its GROUP-TYPE."
               :groups groups
               :closed (org-chronos--log-closed-p log)
               :files (oref log files))))
+    (cl-case org-chronos-json-formatter
+      (jq (when (or (file-executable-p org-chronos-jq-executable)
+                    (executable-find org-chronos-jq-executable))
+            (unless (zerop (call-process-region
+                            (point-min) (point-max)
+                            org-chronos-jq-executable
+                            nil (list (current-buffer) nil)
+                            "."))
+              (error "Error returned while running jq on the exported JSON")))))
     (write-region (point-min) (point-max) out-file)))
 
 (cl-defun org-chronos--build-object-for-json (&key span start end elements
