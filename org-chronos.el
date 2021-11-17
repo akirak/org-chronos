@@ -856,10 +856,10 @@ FIXME: GROUPS, GROUP-TYPE, and SHOW-PERCENTS."
   "Check olps in ITEMS and eliminate nested entries."
   (let (result)
     (dolist (group-by-depth (->> items
-                              (--map (cons (org-chronos-heading-element-olp (cddr it)) it))
-                              (-group-by (-compose #'length #'car))
-                              (-sort (-on #'< #'car))
-                              (-map #'cdr)))
+                                 (--map (cons (org-chronos-heading-element-olp (cddr it)) it))
+                                 (-group-by (-compose #'length #'car))
+                                 (-sort (-on #'< #'car))
+                                 (-map #'cdr)))
       (dolist (item group-by-depth)
         (unless (--find (-is-prefix-p (car it) (car item)) result)
           (push item result))))
